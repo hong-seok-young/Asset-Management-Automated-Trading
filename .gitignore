@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+
+# 환경변수 / API 키 — 절대 커밋 금지
+.env
+.env.local
+.env.*.local
+**/.env
+
+# 런타임 데이터 (페이퍼 트레이딩 기록, 설정)
+server/data/
+
+# 로그
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code 로컬 개인 설정
+.claude/settings.local.json
