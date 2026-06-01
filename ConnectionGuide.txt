@@ -1,0 +1,122 @@
+============================================================
+ 연결 가이드 (ConnectionGuide) — 포트 · API · 외부 연동 · 환경변수
+============================================================
+> 목적: "프론트가 어디로 호출하나? 포트는? 키는 어디 있나?" 를
+>        한 곳에서 확인. 막힘/루프 시 먼저 여기를 본다.
+> 한글 검색 400 버그 같은 연결 문제 재발 방지용.
+> 변경이 생기면 이 파일을 같이 업데이트한다.
+
+
+[1] 포트 (Ports)
+------------------------------------------------------------
+개발(dev, 로컬):
+  - 프론트(Vite dev 서버) : http://localhost:5173
+  - 백엔드(Express)        : http://localhost:4000
+  - 둘이 분리 실행 → Vite proxy 가 /api 를 4000 으로 넘김.
+
+운영(prod, Render 단일 서비스 — Phase 1 목표):
+  - 한 개의 Node 프로세스가 process.env.PORT 로 listen.
+    (Render 가 PORT 를 자동 주입. 코드: PORT || 4000)
+  - 같은 프로세스가 프론트(client/dist) + /api 둘 다 서빙.
+  - 외부 접속은 https://<이름>.onrender.com (HTTPS, 포트 노출 안 함).
+
+
+[2] 프론트 → 백엔드 연결 방식
+------------------------------------------------------------
+  - client/src/api.js : axios baseURL = '/api'  (상대경로, 고정)
+  - 개발: Vite proxy 가 '/api' → 'http://localhost:4000' (client/vite.config.js)
+  - 운영: 같은 주소(same-origin)라 proxy 불필요, CORS 문제 없음.
+  - ⇒ 프론트 코드는 dev/prod 동일. 환경에 따라 주소를 바꾸지 않는다.
+
+
+[3] API 엔드포인트 (현재 구현됨)
+------------------------------------------------------------
+공통:
+  GET  /api/health                      → { ok, time }
+
+주식 (server/routes/stocks.js → services/yahoo.js):
+  GET  /api/stocks/quote?symbols=AAPL,005930.KS
+                                        → 종목별 시세 배열
+  GET  /api/stocks/search?q=삼성        → 종목 검색 (한글/영어/티커)
+  GET  /api/stocks/chart?symbol=AAPL&range=1mo&interval=1d
+                                        → 가격 차트 데이터
+
+암호화폐 (server/routes/crypto.js → services/trader.js, exchanges.js, backtest.js):
+  GET  /api/crypto/status               → 엔진/모드 상태
+  GET  /api/crypto/ticker?exchange=binance&symbol=BTC/USDT
+  GET  /api/crypto/ohlcv?exchange=binance&symbol=BTC/USDT&timeframe=1h&limit=200
+  GET  /api/crypto/balance?exchange=binance    (키 필요, 없으면 400)
+  POST /api/crypto/backtest             body: { exchange, symbol, timeframe, strategy:{type,...}, initialCash, limit }
+  GET  /api/crypto/bots                 → 봇 목록
+  POST /api/crypto/bots                 → 봇 생성 (body: 전략·심볼·금액)
+  PATCH/api/crypto/bots/:id             → 봇 수정
+  DELETE /api/crypto/bots/:id           → 봇 삭제
+  POST /api/crypto/bots/:id/run         → 봇 1회 강제 실행
+  GET  /api/crypto/trades?botId=...     → 체결 내역
+  GET  /api/crypto/logs                 → 엔진 로그
+
+(계획됨 — 아직 구현 전):
+  /api/auth/*   (Phase 2: 회원가입/로그인/로그아웃/세션)
+  /api/keys/*   (Phase 3: 거래소 키 암호화 저장 + 연결 테스트)
+
+
+[4] 외부 서비스 (External APIs)
+------------------------------------------------------------
+Yahoo Finance (주식 시세·검색, 키 불필요):
+  - Node 전역 fetch + 브라우저 User-Agent 헤더로 호출.
+  - BASES: query1.finance.yahoo.com → 실패 시 query2 로 폴백.
+  - /v8/finance/chart    : 시세 + 차트 (getQuotes, getChart)
+  - /v6/finance/autocomplete?query=..&lang=ko-KR&region=KR : 검색(searchSymbols)
+  ⚠️ 주의(버그 이력): /v1/finance/search 는 한글(비ASCII) 쿼리에
+     HTTP 400 "Invalid Search Query" 반환 → 한글 검색이 깨졌었음.
+     그래서 /v6/finance/autocomplete 로 교체함. (lang=ko-KR 필수)
+  - 한계: 미국 주식의 한글 음차(애플/테슬라)는 0건 → 미국 종목은 영어/티커로 검색.
+
+ccxt (거래소 연동):
+  - 바이낸스(기본 테스트넷) / 업비트.
+  - 시세·OHLCV·백테스트는 키 없이 동작. 잔고/실거래만 키 필요.
+
+⚠️ 로컬 "미리보기(preview)" 한계 — 중요(버그 오인 방지):
+   이 개발 환경의 미리보기로 띄운 서버는 HTTPS 외부 호출이 막힌다.
+   (샌드박스가 인증서를 가로채 Node fetch 가 SELF_SIGNED_CERT_IN_CHAIN 으로 실패)
+   → 미리보기에선 Yahoo/거래소 호출이 전부 "fetch failed" 로 뜬다.
+   → 외부 API 기능(주식 시세·검색, ccxt)은 미리보기 말고
+      ① 배포본(Render 등) 또는 ② 터미널에서 직접 실행한 서버에서 테스트한다.
+   (코드/엔드포인트 문제 아님 — 환경 문제. 실제 서버에선 정상 동작 확인됨.)
+
+
+[5] 환경변수 (server/.env — .gitignore 처리됨, 절대 커밋 금지)
+------------------------------------------------------------
+현재 (server/.env.example 기준):
+  PORT=4000
+  TRADE_MODE=paper            # 기본 모의. live 는 명시적으로만.
+  MAX_ORDER_USDT=100          # 1회 주문 최대(USDT)
+  MAX_ORDER_KRW=100000        # 1회 주문 최대(원)
+  MAX_TRADES_PER_DAY=10       # 봇당 하루 매매 횟수 제한
+  BINANCE_API_KEY=            # 비워도 시세/페이퍼 OK
+  BINANCE_SECRET=
+  BINANCE_TESTNET=true        # 테스트넷 권장
+  UPBIT_API_KEY=
+  UPBIT_SECRET=
+
+계획됨 (Phase 2~):
+  DATABASE_URL=...            # PostgreSQL (회원/키/봇)
+  SESSION_SECRET=...          # 세션 서명
+  MASTER_ENCRYPTION_KEY=...   # 사용자 거래소 키 AES-256-GCM 암호화용 서버 마스터키
+⚠️ 운영 서버에는 "내" 거래소 실키를 두지 않는다.
+   실키는 각 사용자가 입력 → 암호화 저장 (Phase 3~).
+
+
+[6] 실행 / 빌드 명령
+------------------------------------------------------------
+설치 : npm run install:all     (루트 + server + client)
+개발 : npm run dev             (server:4000 + client:5173 동시)
+빌드 : npm --prefix client run build   → client/dist 생성
+운영 : npm start               (= npm --prefix server start = node index.js)
+       ※ Phase 1 에서 start 가 client/dist 까지 서빙하도록 만들 예정.
+
+
+[7] 저장소 / 배포 주소
+------------------------------------------------------------
+GitHub : https://github.com/hong-seok-young/Asset-Management-Automated-Trading
+Render : (Phase 1 배포 후 기입) https://__________.onrender.com

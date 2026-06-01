@@ -16,7 +16,9 @@ async function fetchJson(path) {
       }
       return await r.json()
     } catch (e) {
-      lastErr = e
+      const cause = e?.cause?.code || e?.cause?.message || ''
+      lastErr = new Error(`${e.message}${cause ? ` (${cause})` : ''} @ ${base}`)
+      console.warn('[yahoo] fetch 실패:', base + path, '→', e.message, cause)
     }
   }
   throw lastErr || new Error('Yahoo 요청 실패')
