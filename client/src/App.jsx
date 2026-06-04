@@ -33,14 +33,14 @@ export default function App() {
             <span className="text-lg font-bold tracking-tight">내 자산</span>
           </div>
           <nav className="flex gap-1">
-            <Tab to="/" icon={<Wallet size={16} />}>
+            <Tab to="/" icon={<PiggyBank size={16} />}>
+              절세 가이드
+            </Tab>
+            <Tab to="/portfolio" icon={<Wallet size={16} />}>
               포트폴리오
             </Tab>
             <Tab to="/trading" icon={<Bot size={16} />}>
               자동매매
-            </Tab>
-            <Tab to="/guide" icon={<PiggyBank size={16} />}>
-              절세 가이드
             </Tab>
           </nav>
         </div>
@@ -48,9 +48,9 @@ export default function App() {
 
       <main className="mx-auto max-w-5xl px-4 py-5 pb-24">
         <Routes>
-          <Route path="/" element={<Portfolio />} />
+          <Route path="/" element={<TaxGuide />} />
+          <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/trading" element={<Trading />} />
-          <Route path="/guide" element={<TaxGuide />} />
         </Routes>
       </main>
     </div>

@@ -4,7 +4,7 @@ import { Card, Field, Input, Pill, Select } from '../components/ui.jsx'
 import { fmtNum } from '../lib/format.js'
 import AllocationPie, { COLORS } from '../components/AllocationPie.jsx'
 
-const LS_KEY = 'taxguide.inputs.v1'
+const LS_KEY = 'taxguide.inputs.v2'
 const load = () => {
   try {
     return JSON.parse(localStorage.getItem(LS_KEY)) || {}
@@ -40,7 +40,7 @@ function allocate(saving) {
 
 export default function TaxGuide() {
   const saved = load()
-  const [salaryMan, setSalaryMan] = useState(saved.salaryMan ?? '') // 월 세전급여(만원)
+  const [salaryMan, setSalaryMan] = useState(saved.salaryMan ?? '') // 월 실수령액(세후, 만원)
   const [savingMan, setSavingMan] = useState(saved.savingMan ?? '') // 월 저축액(만원)
   const [hasEmergency, setHasEmergency] = useState(saved.hasEmergency ?? 'no')
 
@@ -48,11 +48,12 @@ export default function TaxGuide() {
     localStorage.setItem(LS_KEY, JSON.stringify({ salaryMan, savingMan, hasEmergency }))
   }, [salaryMan, savingMan, hasEmergency])
 
-  const salary = (Number(salaryMan) || 0) * 10000 // 월급(원)
+  const salary = (Number(salaryMan) || 0) * 10000 // 월 실수령액(세후, 원)
   const saving = (Number(savingMan) || 0) * 10000 // 월저축(원)
-  const annualSalary = salary * 12
-  const rate = annualSalary > 55_000_000 ? 0.132 : 0.165 // 총급여 5,500만 초과 13.2% / 이하 16.5%
-  const emergencyTarget = salary * 3 // 비상금 권장(약 3개월치)
+  const annualNet = salary * 12 // 연 실수령(세후)
+  // 세액공제율: 총급여 5,500만(≈ 세후 연 4,600만) 경계로 추정. 실수령 입력이라 근사값.
+  const rate = annualNet > 46_000_000 ? 0.132 : 0.165
+  const emergencyTarget = salary * 3 // 비상금 권장(세후 약 3개월치)
 
   const alloc = useMemo(() => allocate(saving), [saving])
   const deductibleYear = (alloc.pension + alloc.irp) * 12 // 세액공제 대상(연)
@@ -77,7 +78,7 @@ export default function TaxGuide() {
           <h2 className="text-base font-semibold">절세계좌 투자 가이드</h2>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="월 세전 급여 (만원)" hint="연봉 ÷ 12, 세전 기준">
+          <Field label="월 실수령액 (세후, 만원)" hint="매달 통장에 들어오는 금액">
             <Input type="number" inputMode="numeric" value={salaryMan} onChange={(e) => setSalaryMan(e.target.value)} placeholder="예: 300" />
           </Field>
           <Field label="월 저축 가능액 (만원)" hint="매달 투자에 넣을 금액">
@@ -97,7 +98,7 @@ export default function TaxGuide() {
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-sm text-slate-500">
             <Calculator size={28} className="text-slate-600" />
             <div>
-              월급과 월 저축액을 입력하면
+              월 실수령액과 월 저축액을 입력하면
               <br />
               절세계좌별 추천 배분을 보여드려요.
             </div>
@@ -112,7 +113,7 @@ export default function TaxGuide() {
                 <div className="text-sm text-slate-400">예상 연 세액공제 환급액</div>
                 <div className="tnum mt-1 text-3xl font-bold text-emerald-400">{fmtNum(refundYear)}원</div>
                 <div className="mt-1 text-xs text-slate-500">
-                  연봉 {fmtNum(Math.round(annualSalary / 10000))}만원 → 세액공제율 {(rate * 100).toFixed(1)}% · 공제대상 {fmtNum(Math.round(deductibleYear / 10000))}만원/년
+                  연 실수령 {fmtNum(Math.round(annualNet / 10000))}만원(세후) → 세액공제율 {(rate * 100).toFixed(1)}% (추정) · 공제대상 {fmtNum(Math.round(deductibleYear / 10000))}만원/년
                 </div>
               </div>
               <div>
@@ -192,7 +193,7 @@ export default function TaxGuide() {
           </div>
 
           <p className="px-1 text-[11px] leading-relaxed text-slate-500">
-            ※ 박곰희 작가의 절세계좌 전략과 2026년 세제 한도를 참고한 <b>참고용 가이드</b>입니다. 투자 자문·권유가 아니며, 실제 납입·투자 판단과 손익은 본인 책임입니다. 세부 한도·요건은 가입 증권사/국세청 기준을 확인하세요.
+            ※ 박곰희 작가의 절세계좌 전략과 2026년 세제 한도를 참고한 <b>참고용 가이드</b>입니다. 세액공제율은 실수령액 기준 추정이며, 투자 자문·권유가 아닙니다. 실제 납입·투자 판단과 손익은 본인 책임이며, 세부 한도·요건은 가입 증권사/국세청 기준을 확인하세요.
           </p>
         </>
       )}
