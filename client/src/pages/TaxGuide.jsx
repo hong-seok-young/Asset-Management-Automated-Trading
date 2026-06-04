@@ -41,10 +41,9 @@ const toArr = (v) => {
   return Array.isArray(a) ? a.map((x) => ({ id: x.id ?? uid(), ...x })) : []
 }
 
-const PENSION_START_AGE = 65 // 연금 개시(그래프 기본 종료 시점)
-const MAX_YEARS = 50 // 시뮬레이션 최대 기간
+const PENSION_START_AGE = 65
+const MAX_YEARS = 50
 
-// 월 납입 한도(원) — 2026 기준
 const MONTHLY_CAP = {
   pension: 500_000,
   irp: 250_000,
@@ -74,10 +73,11 @@ function allocate(saving, priority) {
 }
 
 // ── 자산 성장 시뮬레이션 (월 단위) ──────────────────────────────
-//  매달: 자산 = 자산×(1+월수익률) + (월급 + 부업 − 소비) − (그 달 목돈지출)
-//  월급은 매년 상승(진급 시 점프), 부업은 일정. 그래프는 연금개시(65세)·목표년도까지.
-//  목표 년도가 있으면, 그때까지 목표를 채우는 데 "매달 추가로 필요한 금액"을 역산.
-function simulate({ startSalary, side, spend, raise, promotions, lumps, target, targetYear, annualReturn, startYear, startMonth, startAge }) {
+//  시작 자산 = seedGrow(주식, 성장) + flatBase(부동산·현금CMA, 현상유지)
+//  매달: 성장자산 = 성장자산×(1+월수익률) + (월급+부업−소비) − 목돈지출
+//  총자산 = 성장자산 + flatBase. 월급은 매년 상승(진급 시 점프), 부업은 일정.
+//  목표 년도가 있으면 그때까지 목표를 채우는 데 "매달 추가로 필요한 금액"을 역산.
+function simulate({ startSalary, side, spend, raise, promotions, lumps, target, targetYear, annualReturn, startYear, startMonth, startAge, seedGrow, flatBase }) {
   const MAX_M = MAX_YEARS * 12
   const mRate = annualReturn / 12
 
@@ -103,11 +103,12 @@ function simulate({ startSalary, side, spend, raise, promotions, lumps, target, 
     }
   }
 
-  let wealth = 0
-  let principal = 0
+  let wealth = seedGrow // 성장 자산(주식 + 매월 저축 적립분)
+  let principal = seedGrow + flatBase // 누적 원금(현재 보유 + 적립, 운용수익 제외)
   let reachMonth = null
   let dipsAfterReach = false
-  const yearly = [{ year: 0, total: 0, principal: 0 }]
+  const start = Math.round(seedGrow + flatBase)
+  const yearly = [{ year: 0, total: start, principal: start }]
 
   for (let m = 0; m < MAX_M; m++) {
     const net = salaryByYear[Math.floor(m / 12)] + side - spend
@@ -118,12 +119,13 @@ function simulate({ startSalary, side, spend, raise, promotions, lumps, target, 
       wealth -= lump
       principal -= lump
     }
+    const total = wealth + flatBase
     if (target > 0) {
-      if (reachMonth == null && wealth >= target) reachMonth = m + 1
-      else if (reachMonth != null && wealth < target) dipsAfterReach = true
+      if (reachMonth == null && total >= target) reachMonth = m + 1
+      else if (reachMonth != null && total < target) dipsAfterReach = true
     }
     if ((m + 1) % 12 === 0) {
-      yearly.push({ year: (m + 1) / 12, total: Math.round(wealth), principal: Math.round(principal) })
+      yearly.push({ year: (m + 1) / 12, total: Math.round(total), principal: Math.round(principal) })
     }
   }
 
@@ -140,13 +142,12 @@ function simulate({ startSalary, side, spend, raise, promotions, lumps, target, 
     }
   }
 
-  // 목표 년도까지 목표 금액 채우려면 매달 추가로 얼마? (역산)
   let gap = null
   const targetYearOff = target > 0 && targetYear > startYear ? targetYear - startYear : 0
   if (targetYearOff >= 1 && targetYearOff <= MAX_YEARS) {
     const wealthAtTarget = yearly[targetYearOff]?.total ?? 0
     const N = targetYearOff * 12
-    const annuity = mRate > 0 ? (Math.pow(1 + mRate, N) - 1) / mRate : N // 매달 1원 적립 시 미래가치
+    const annuity = mRate > 0 ? (Math.pow(1 + mRate, N) - 1) / mRate : N
     const shortfall = target - wealthAtTarget
     gap = {
       targetYear,
@@ -166,6 +167,7 @@ function simulate({ startSalary, side, spend, raise, promotions, lumps, target, 
 
   return {
     rows,
+    start,
     displayYears,
     salaryByYear,
     monthlySavingNow: salaryByYear[0] + side - spend,
@@ -246,7 +248,6 @@ function MonthStepper({ value, onChange }) {
   )
 }
 
-// 접이식 섹션
 function Section({ title, children }) {
   return (
     <details className="mt-2 rounded-xl border border-white/10 bg-white/[0.02]">
@@ -264,8 +265,12 @@ export default function TaxGuide() {
   const [sideMan, setSideMan] = useState(saved.sideMan ?? '') // 부업 월 수입(만원)
   const [spendMan, setSpendMan] = useState(saved.spendMan ?? '') // 월 소비(만원)
   const [age, setAge] = useState(saved.age ?? '') // 만 나이
+  // 현재 보유 자산
+  const [reEok, setReEok] = useState(saved.reEok ?? '') // 부동산(억)
+  const [stockMan, setStockMan] = useState(saved.stockMan ?? '') // 주식(만원)
+  const [cashMan, setCashMan] = useState(saved.cashMan ?? '') // 현금/CMA(만원)
   const [targetEok, setTargetEok] = useState(saved.targetEok ?? (saved.targetMan ? String((Number(saved.targetMan) || 0) / 10000) : '')) // 목표(억)
-  const [targetYear, setTargetYear] = useState(saved.targetYear ?? String(cy + 10)) // 목표 년도
+  const [targetYear, setTargetYear] = useState(saved.targetYear ?? String(cy + 10))
   const [hasEmergency, setHasEmergency] = useState(saved.hasEmergency ?? 'no')
   const [raisePct, setRaisePct] = useState(saved.raisePct ?? '3')
   const [promotions, setPromotions] = useState(() => toArr(saved.promotions))
@@ -277,9 +282,9 @@ export default function TaxGuide() {
   useEffect(() => {
     localStorage.setItem(
       LS_KEY,
-      JSON.stringify({ salaryMan, sideMan, spendMan, age, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel }),
+      JSON.stringify({ salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel }),
     )
-  }, [salaryMan, sideMan, spendMan, age, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel])
+  }, [salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel])
 
   const nextYear = cy + 1
   const thisYm = `${cy}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
@@ -293,7 +298,13 @@ export default function TaxGuide() {
   const salary = (Number(salaryMan) || 0) * 10000
   const side = (Number(sideMan) || 0) * 10000
   const spend = (Number(spendMan) || 0) * 10000
-  const saving = Math.max(0, salary + side - spend) // 월 저축(첫해)
+  const saving = Math.max(0, salary + side - spend)
+  const realEstate = (parseFloat(reEok) || 0) * 100_000_000 // 부동산(원) — 현상유지
+  const stocks = (Number(stockMan) || 0) * 10000 // 주식(원) — 성장
+  const cash = (Number(cashMan) || 0) * 10000 // 현금/CMA(원) — 현상유지
+  const seedGrow = stocks
+  const flatBase = realEstate + cash
+  const currentNetWorth = realEstate + stocks + cash
   const grossYear = (Number(grossMan) || 0) * 10000
   const target = (parseFloat(targetEok) || 0) * 100_000_000
   const tYear = Number(targetYear) || 0
@@ -305,7 +316,7 @@ export default function TaxGuide() {
   const rate = grossYear > 0 ? (grossYear > 55_000_000 ? 0.132 : 0.165) : annualNet > 46_000_000 ? 0.132 : 0.165
   const rateBasis = grossYear > 0 ? '세전 연봉 기준' : '실수령 기준 추정'
   const emergencyTarget = (spend > 0 ? spend : salary) * 3
-  const emgBasis = spend > 0 ? '월 소비 3개월' : '월 실수령 3개월'
+  const cmaCovered = cash > 0 ? cash >= emergencyTarget : hasEmergency === 'yes'
 
   const priority = prioritySel === 'midterm' ? 'midterm' : 'retire'
   const alloc = useMemo(() => allocate(saving, priority), [saving, priority])
@@ -335,8 +346,10 @@ export default function TaxGuide() {
         startYear,
         startMonth,
         startAge: ageNum,
+        seedGrow,
+        flatBase,
       }),
-    [salary, side, spend, raise, promotions, lumps, target, tYear, ret, startYear, startMonth, ageNum],
+    [salary, side, spend, raise, promotions, lumps, target, tYear, ret, startYear, startMonth, ageNum, seedGrow, flatBase],
   )
 
   const useAge = ageNum > 0
@@ -355,7 +368,7 @@ export default function TaxGuide() {
     { key: 'cma', name: 'CMA', role: '남는 돈 · 대기자금', concept: '수시입출 파킹', monthly: alloc.cma, capM: null, Icon: Wallet },
   ]
   const pieData = buckets.filter((b) => b.monthly > 0).map((b) => ({ name: b.name, value: Math.round(b.monthly) }))
-  const hasInput = salary > 0
+  const hasInput = salary > 0 || currentNetWorth > 0
 
   const shareLink = async () => {
     const params = {
@@ -363,6 +376,9 @@ export default function TaxGuide() {
       sideMan,
       spendMan,
       age,
+      reEok,
+      stockMan,
+      cashMan,
       targetEok,
       targetYear,
       hasEmergency,
@@ -421,9 +437,27 @@ export default function TaxGuide() {
         <div className="mt-2.5">
           <input type="range" min="0" max="500" step="5" value={Number(spendMan) || 0} onChange={(e) => setSpendMan(e.target.value)} className="w-full accent-indigo-400" />
           <div className="mt-1 text-[11px] text-slate-500">
-            월 저축 가능액 ={' '}
-            <b className={saving > 0 ? 'text-emerald-400' : 'text-rose-400'}>{fmtNum(Math.round(saving / 10000))}만원</b>
+            월 저축 가능액 = <b className={saving > 0 ? 'text-emerald-400' : 'text-rose-400'}>{fmtNum(Math.round(saving / 10000))}만원</b>
             <span className="text-slate-600"> (월급{side > 0 ? '+부업' : ''} − 소비)</span>
+          </div>
+        </div>
+
+        {/* 현재 보유 자산 (시드) */}
+        <div className="mt-3">
+          <div className="mb-1.5 text-[11px] font-medium text-slate-400">
+            현재 보유 자산 (시작 시드)
+            {currentNetWorth > 0 && <span className="text-slate-500"> · 총 {eok(currentNetWorth)}</span>}
+          </div>
+          <div className="grid grid-cols-3 gap-2.5">
+            <Field label="부동산 (억)">
+              <Input type="number" inputMode="decimal" step="0.1" value={reEok} onChange={(e) => setReEok(e.target.value)} placeholder="0" />
+            </Field>
+            <Field label="주식 (만원)">
+              <Input type="number" inputMode="numeric" value={stockMan} onChange={(e) => setStockMan(e.target.value)} placeholder="0" />
+            </Field>
+            <Field label="현금/CMA (만원)">
+              <Input type="number" inputMode="numeric" value={cashMan} onChange={(e) => setCashMan(e.target.value)} placeholder="0" />
+            </Field>
           </div>
         </div>
 
@@ -443,13 +477,13 @@ export default function TaxGuide() {
             <Field label={`연 월급 상승률 ${raisePct}%`}>
               <input type="range" min="0" max="10" step="0.5" value={raisePct} onChange={(e) => setRaisePct(e.target.value)} className="mt-2 w-full accent-indigo-400" />
             </Field>
-            <Field label={`예상 연 수익률 ${returnPct}%`} hint="0이면 순수 저축">
+            <Field label={`예상 연 수익률 ${returnPct}%`} hint="주식·저축에 적용">
               <input type="range" min="0" max="12" step="0.5" value={returnPct} onChange={(e) => setReturnPct(e.target.value)} className="mt-2 w-full accent-indigo-400" />
             </Field>
             <Field label="세전 연봉 (만원)" hint="정확한 공제율">
               <Input type="number" inputMode="numeric" value={grossMan} onChange={(e) => setGrossMan(e.target.value)} placeholder="선택" />
             </Field>
-            <Field label="비상금(CMA)">
+            <Field label="비상금(CMA)" hint="현금 입력 시 자동 판정">
               <Select value={hasEmergency} onChange={(e) => setHasEmergency(e.target.value)}>
                 <option value="no">아직 없음</option>
                 <option value="yes">이미 있음</option>
@@ -520,7 +554,7 @@ export default function TaxGuide() {
         <Card className="p-4">
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-sm text-slate-500">
             <Calculator size={26} className="text-slate-600" />
-            <div>월 실수령·소비·나이·목표를 넣으면 자산 그래프와 목표 달성 분석이 나와요.</div>
+            <div>월 실수령·소비·나이·목표(+현재 자산)를 넣으면 자산 그래프와 목표 달성 분석이 나와요.</div>
           </div>
         </Card>
       ) : (
@@ -530,6 +564,7 @@ export default function TaxGuide() {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <LineChart size={17} className="text-emerald-300" />
               <h3 className="text-sm font-semibold">자산 성장 프로젝션</h3>
+              {currentNetWorth > 0 && <Pill tone="slate">현재 {eok(currentNetWorth)}</Pill>}
               {useAge && <Pill tone="blue">만 {ageNum}→{PENSION_START_AGE}세</Pill>}
               {side > 0 && <Pill tone="green">부업 +{fmtNum(Number(sideMan) || 0)}만</Pill>}
               {promotions.length > 0 && <Pill tone="indigo">진급 {promotions.length}회</Pill>}
@@ -539,7 +574,7 @@ export default function TaxGuide() {
               </button>
             </div>
 
-            {/* 핵심 지표 3 + 목표/역산 */}
+            {/* 핵심 지표 3 */}
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl bg-white/[0.03] p-3">
                 <div className="text-[11px] text-slate-400">월 저축액</div>
@@ -549,7 +584,7 @@ export default function TaxGuide() {
               <div className="rounded-xl bg-white/[0.03] p-3">
                 <div className="text-[11px] text-slate-400">{endLabel} 예상 자산</div>
                 <div className="tnum text-xl font-bold">{eok(proj.finalWealth)}</div>
-                <div className="text-[11px] text-slate-500">{fmtNum(proj.finalWealth)}원</div>
+                <div className="text-[11px] text-slate-500">{currentNetWorth > 0 ? `현재 ${eok(currentNetWorth)} → ` : ''}{fmtNum(proj.finalWealth)}원</div>
               </div>
               <div className="rounded-xl bg-white/[0.03] p-3">
                 <div className="flex items-center gap-1 text-[11px] text-slate-400">
@@ -598,7 +633,7 @@ export default function TaxGuide() {
               <GrowthChart data={chartRows} xUnit={xUnit} target={target} reachX={reachX} lumpXs={lumpXs} />
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: '#34d399' }} /> 총 자산</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: '#818cf8' }} /> 누적 저축원금</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: '#818cf8' }} /> 누적 원금</span>
                 {target > 0 && <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-full" style={{ background: '#f59e0b' }} /> 목표선</span>}
                 {lumps.length > 0 && <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-full" style={{ background: '#f43f5e' }} /> 목돈</span>}
                 <span className="text-slate-500">· 가로축 {useAge ? '나이' : '경과연수'}</span>
@@ -606,7 +641,9 @@ export default function TaxGuide() {
             </div>
 
             {proj.dipsAfterReach && <div className="mt-2 text-[11px] text-amber-300">※ 목표 달성 후 목돈 지출로 일시적으로 목표 아래로 내려갈 수 있어요.</div>}
-            <p className="mt-2 text-[11px] text-slate-500">※ 매달 (월급+부업−소비)를 {returnPct}% 복리로 굴린다는 단순 가정. 소비·부업 일정, 월급만 매년 {raisePct}%(진급 시 점프) 상승.</p>
+            <p className="mt-2 text-[11px] text-slate-500">
+              ※ 시작 시드 = 부동산+주식+현금. <b>부동산·현금(CMA)은 현상유지</b>, <b>주식·매월 저축만 {returnPct}% 복리</b>로 성장 가정. 소비·부업 일정, 월급만 매년 {raisePct}%(진급 시 점프) 상승.
+            </p>
           </Card>
 
           {/* 절세계좌 — 접이식 (기본 닫힘) */}
@@ -628,11 +665,17 @@ export default function TaxGuide() {
                   <div className="text-xs text-slate-400">권장 비상금 (CMA)</div>
                   <div className="tnum mt-1 text-xl font-bold">{fmtNum(emergencyTarget)}원</div>
                   <div className="mt-1 flex items-center gap-2">
-                    {hasEmergency === 'no' ? <Pill tone="amber">아직 없음</Pill> : <Pill tone="green">확보됨</Pill>}
-                    <span className="text-[11px] text-slate-500">{emgBasis}</span>
+                    {cmaCovered ? <Pill tone="green">확보됨</Pill> : <Pill tone="amber">부족</Pill>}
+                    <span className="text-[11px] text-slate-500">{cash > 0 ? `현금(CMA) ${eok(cash)} 보유` : '월 소비 3개월'}</span>
                   </div>
                 </div>
               </div>
+              {!cmaCovered && (
+                <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                  <Info size={13} className="mt-0.5 shrink-0" />
+                  <span>먼저 비상금 {fmtNum(emergencyTarget)}원을 CMA에 채운 뒤 아래 배분을 시작하세요{cash > 0 ? ` (현재 현금 ${eok(cash)})` : ''}.</span>
+                </div>
+              )}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <Card className="p-3">
