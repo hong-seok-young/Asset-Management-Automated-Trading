@@ -11,6 +11,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # 빌드 단계에서 devDependencies(vite 등)까지 설치되도록 강제 (NODE_ENV=production 이어도 빌드 가능)
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
       # 안전: 배포 서버는 기본 페이퍼(모의) 모드. 실거래 키는 올리지 않는다.
       - key: TRADE_MODE
         value: paper
