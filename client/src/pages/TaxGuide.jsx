@@ -4,6 +4,7 @@ import { Card, Field, Input, Pill, Select } from '../components/ui.jsx'
 import { fmtNum } from '../lib/format.js'
 import AllocationPie, { COLORS } from '../components/AllocationPie.jsx'
 import GrowthChart from '../components/GrowthChart.jsx'
+import AccountGuide from '../components/AccountGuide.jsx'
 
 const LS_KEY = 'taxguide.inputs.v3'
 const load = () => {
@@ -329,6 +330,8 @@ export default function TaxGuide() {
               })}
             </div>
           </div>
+
+          <AccountGuide />
 
           <p className="px-1 text-[11px] leading-relaxed text-slate-500">
             ※ 박곰희 작가의 절세계좌 전략과 2026년 세제 한도를 참고한 <b>참고용 가이드</b>입니다. 세액공제율·미래 자산은 추정값이며, 투자 자문·권유가 아닙니다. 실제 납입·투자 판단과 손익은 본인 책임이며, 세부 한도·요건은 가입 증권사/국세청 기준을 확인하세요.
