@@ -269,6 +269,7 @@ export default function TaxGuide() {
   const [reEok, setReEok] = useState(saved.reEok ?? '') // 부동산(억)
   const [stockMan, setStockMan] = useState(saved.stockMan ?? '') // 주식(만원)
   const [cashMan, setCashMan] = useState(saved.cashMan ?? '') // 현금/CMA(만원)
+  const [includeRE, setIncludeRE] = useState(saved.includeRE === undefined ? true : saved.includeRE === true || saved.includeRE === '1' || saved.includeRE === 'true') // 그래프에 부동산 포함 여부
   const [targetEok, setTargetEok] = useState(saved.targetEok ?? (saved.targetMan ? String((Number(saved.targetMan) || 0) / 10000) : '')) // 목표(억)
   const [targetYear, setTargetYear] = useState(saved.targetYear ?? String(cy + 10))
   const [hasEmergency, setHasEmergency] = useState(saved.hasEmergency ?? 'no')
@@ -282,9 +283,9 @@ export default function TaxGuide() {
   useEffect(() => {
     localStorage.setItem(
       LS_KEY,
-      JSON.stringify({ salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel }),
+      JSON.stringify({ salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, includeRE, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel }),
     )
-  }, [salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel])
+  }, [salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, includeRE, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel])
 
   const nextYear = cy + 1
   const thisYm = `${cy}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
@@ -303,7 +304,7 @@ export default function TaxGuide() {
   const stocks = (Number(stockMan) || 0) * 10000 // 주식(원) — 성장
   const cash = (Number(cashMan) || 0) * 10000 // 현금/CMA(원) — 현상유지
   const seedGrow = stocks
-  const flatBase = realEstate + cash
+  const flatBase = (includeRE ? realEstate : 0) + cash
   const currentNetWorth = realEstate + stocks + cash
   const grossYear = (Number(grossMan) || 0) * 10000
   const target = (parseFloat(targetEok) || 0) * 100_000_000
@@ -379,6 +380,7 @@ export default function TaxGuide() {
       reEok,
       stockMan,
       cashMan,
+      includeRE: includeRE ? '1' : '0',
       targetEok,
       targetYear,
       hasEmergency,
@@ -564,7 +566,17 @@ export default function TaxGuide() {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <LineChart size={17} className="text-emerald-300" />
               <h3 className="text-sm font-semibold">자산 성장 프로젝션</h3>
-              {currentNetWorth > 0 && <Pill tone="slate">현재 {eok(currentNetWorth)}</Pill>}
+              {proj.start > 0 && <Pill tone="slate">현재 {eok(proj.start)}{realEstate > 0 && !includeRE ? ' (부동산 제외)' : ''}</Pill>}
+              {realEstate > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIncludeRE((v) => !v)}
+                  title="그래프에 부동산 포함/제외"
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition ${includeRE ? 'bg-indigo-500/25 text-indigo-200 hover:bg-indigo-500/35' : 'bg-white/10 text-slate-400 hover:bg-white/15'}`}
+                >
+                  🏠 부동산 {includeRE ? '포함' : '제외'}
+                </button>
+              )}
               {useAge && <Pill tone="blue">만 {ageNum}→{PENSION_START_AGE}세</Pill>}
               {side > 0 && <Pill tone="green">부업 +{fmtNum(Number(sideMan) || 0)}만</Pill>}
               {promotions.length > 0 && <Pill tone="indigo">진급 {promotions.length}회</Pill>}
@@ -584,7 +596,7 @@ export default function TaxGuide() {
               <div className="rounded-xl bg-white/[0.03] p-3">
                 <div className="text-[11px] text-slate-400">{endLabel} 예상 자산</div>
                 <div className="tnum text-xl font-bold">{eok(proj.finalWealth)}</div>
-                <div className="text-[11px] text-slate-500">{currentNetWorth > 0 ? `현재 ${eok(currentNetWorth)} → ` : ''}{fmtNum(proj.finalWealth)}원</div>
+                <div className="text-[11px] text-slate-500">{proj.start > 0 ? `현재 ${eok(proj.start)} → ` : ''}{fmtNum(proj.finalWealth)}원</div>
               </div>
               <div className="rounded-xl bg-white/[0.03] p-3">
                 <div className="flex items-center gap-1 text-[11px] text-slate-400">
@@ -642,7 +654,7 @@ export default function TaxGuide() {
 
             {proj.dipsAfterReach && <div className="mt-2 text-[11px] text-amber-300">※ 목표 달성 후 목돈 지출로 일시적으로 목표 아래로 내려갈 수 있어요.</div>}
             <p className="mt-2 text-[11px] text-slate-500">
-              ※ 시작 시드 = 부동산+주식+현금. <b>부동산·현금(CMA)은 현상유지</b>, <b>주식·매월 저축만 {returnPct}% 복리</b>로 성장 가정. 소비·부업 일정, 월급만 매년 {raisePct}%(진급 시 점프) 상승.
+              ※ 시작 시드 = {includeRE ? '부동산+주식+현금' : '주식+현금 (부동산 제외)'}. <b>{includeRE ? '부동산·현금(CMA)' : '현금(CMA)'}은 현상유지</b>, <b>주식·매월 저축만 {returnPct}% 복리</b>로 성장 가정. 소비·부업 일정, 월급만 매년 {raisePct}%(진급 시 점프) 상승.
             </p>
           </Card>
 
