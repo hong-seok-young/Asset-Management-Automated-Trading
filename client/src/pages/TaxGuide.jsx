@@ -257,6 +257,33 @@ function Section({ title, children }) {
   )
 }
 
+// 3자리마다 쉼표를 보여주는 숫자 입력칸. 내부 state에는 쉼표 없는 원본 문자열을 저장한다.
+const withCommas = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+function NumberInput({ value, onChange, allowDecimal = false, ...props }) {
+  const v = value == null ? '' : String(value)
+  let display = ''
+  if (v !== '') {
+    if (allowDecimal) {
+      const [int = '', dec] = v.split('.')
+      display = dec !== undefined ? `${withCommas(int)}.${dec}` : withCommas(int)
+    } else {
+      display = withCommas(v)
+    }
+  }
+  const handle = (e) => {
+    let raw = e.target.value.replace(/,/g, '')
+    if (allowDecimal) {
+      raw = raw.replace(/[^\d.]/g, '')
+      const i = raw.indexOf('.')
+      if (i !== -1) raw = raw.slice(0, i + 1) + raw.slice(i + 1).replace(/\./g, '')
+    } else {
+      raw = raw.replace(/[^\d]/g, '')
+    }
+    onChange(raw)
+  }
+  return <Input type="text" inputMode={allowDecimal ? 'decimal' : 'numeric'} value={display} onChange={handle} {...props} />
+}
+
 export default function TaxGuide() {
   const saved = { ...load(), ...fromUrl() }
   const cy = new Date().getFullYear()
@@ -422,16 +449,16 @@ export default function TaxGuide() {
         {/* 핵심 입력 */}
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           <Field label="월 실수령 (만원)">
-            <Input type="number" inputMode="numeric" value={salaryMan} onChange={(e) => setSalaryMan(e.target.value)} placeholder="300" />
+            <NumberInput value={salaryMan} onChange={setSalaryMan} placeholder="300" />
           </Field>
           <Field label="부업 수입 (만원)">
-            <Input type="number" inputMode="numeric" value={sideMan} onChange={(e) => setSideMan(e.target.value)} placeholder="0" />
+            <NumberInput value={sideMan} onChange={setSideMan} placeholder="0" />
           </Field>
           <Field label="월 소비 (만원)">
-            <Input type="number" inputMode="numeric" value={spendMan} onChange={(e) => setSpendMan(e.target.value)} placeholder="180" />
+            <NumberInput value={spendMan} onChange={setSpendMan} placeholder="180" />
           </Field>
           <Field label="만 나이">
-            <Input type="number" inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} placeholder="35" />
+            <NumberInput value={age} onChange={setAge} placeholder="35" />
           </Field>
         </div>
 
@@ -452,13 +479,13 @@ export default function TaxGuide() {
           </div>
           <div className="grid grid-cols-3 gap-2.5">
             <Field label="부동산 (억)">
-              <Input type="number" inputMode="decimal" step="0.1" value={reEok} onChange={(e) => setReEok(e.target.value)} placeholder="0" />
+              <NumberInput allowDecimal value={reEok} onChange={setReEok} placeholder="0" />
             </Field>
             <Field label="주식 (만원)">
-              <Input type="number" inputMode="numeric" value={stockMan} onChange={(e) => setStockMan(e.target.value)} placeholder="0" />
+              <NumberInput value={stockMan} onChange={setStockMan} placeholder="0" />
             </Field>
             <Field label="현금/CMA (만원)">
-              <Input type="number" inputMode="numeric" value={cashMan} onChange={(e) => setCashMan(e.target.value)} placeholder="0" />
+              <NumberInput value={cashMan} onChange={setCashMan} placeholder="0" />
             </Field>
           </div>
         </div>
@@ -466,7 +493,7 @@ export default function TaxGuide() {
         {/* 목표 */}
         <div className="mt-3 grid grid-cols-2 gap-2.5">
           <Field label="목표 금액 (억원)" hint={target > 0 ? `= ${eok(target)}원` : '예: 5 = 5억'}>
-            <Input type="number" inputMode="decimal" step="0.1" value={targetEok} onChange={(e) => setTargetEok(e.target.value)} placeholder="5" />
+            <NumberInput allowDecimal value={targetEok} onChange={setTargetEok} placeholder="5" />
           </Field>
           <Field label="목표 년도" hint={tYear > startYear ? `${tYear - startYear}년 안에` : '언제까지'}>
             <YearStepper value={targetYear} onChange={setTargetYear} defaultYear={cy + 10} />
@@ -483,7 +510,7 @@ export default function TaxGuide() {
               <input type="range" min="0" max="12" step="0.5" value={returnPct} onChange={(e) => setReturnPct(e.target.value)} className="mt-2 w-full accent-indigo-400" />
             </Field>
             <Field label="세전 연봉 (만원)" hint="정확한 공제율">
-              <Input type="number" inputMode="numeric" value={grossMan} onChange={(e) => setGrossMan(e.target.value)} placeholder="선택" />
+              <NumberInput value={grossMan} onChange={setGrossMan} placeholder="선택" />
             </Field>
             <Field label="비상금(CMA)" hint="현금 입력 시 자동 판정">
               <Select value={hasEmergency} onChange={(e) => setHasEmergency(e.target.value)}>
@@ -516,7 +543,7 @@ export default function TaxGuide() {
                   <div className="w-32">
                     <YearStepper value={p.year} onChange={(v) => updPromo(p.id, 'year', v)} defaultYear={nextYear} />
                   </div>
-                  <Input className="w-40 flex-1" type="number" inputMode="numeric" value={p.salaryMan} onChange={(e) => updPromo(p.id, 'salaryMan', e.target.value)} placeholder="진급 후 월 실수령(만원)" />
+                  <NumberInput className="w-40 flex-1" value={p.salaryMan} onChange={(v) => updPromo(p.id, 'salaryMan', v)} placeholder="진급 후 월 실수령(만원)" />
                   <button onClick={() => delPromo(p.id)} className="rounded-lg p-2 text-slate-400 hover:bg-rose-500/15 hover:text-rose-300" title="삭제">
                     <Trash2 size={15} />
                   </button>
@@ -540,7 +567,7 @@ export default function TaxGuide() {
               {lumps.map((l) => (
                 <div key={l.id} className="flex flex-wrap items-center gap-2">
                   <MonthStepper value={l.ym} onChange={(v) => updLump(l.id, 'ym', v)} />
-                  <Input className="w-24" type="number" inputMode="numeric" value={l.amountMan} onChange={(e) => updLump(l.id, 'amountMan', e.target.value)} placeholder="만원" />
+                  <NumberInput className="w-24" value={l.amountMan} onChange={(v) => updLump(l.id, 'amountMan', v)} placeholder="만원" />
                   <Input className="w-28 flex-1" value={l.memo} onChange={(e) => updLump(l.id, 'memo', e.target.value)} placeholder="메모" />
                   <button onClick={() => delLump(l.id)} className="rounded-lg p-2 text-slate-400 hover:bg-rose-500/15 hover:text-rose-300" title="삭제">
                     <Trash2 size={15} />
@@ -567,16 +594,6 @@ export default function TaxGuide() {
               <LineChart size={17} className="text-emerald-300" />
               <h3 className="text-sm font-semibold">자산 성장 프로젝션</h3>
               {proj.start > 0 && <Pill tone="slate">현재 {eok(proj.start)}{realEstate > 0 && !includeRE ? ' (부동산 제외)' : ''}</Pill>}
-              {realEstate > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setIncludeRE((v) => !v)}
-                  title="그래프에 부동산 포함/제외"
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition ${includeRE ? 'bg-indigo-500/25 text-indigo-200 hover:bg-indigo-500/35' : 'bg-white/10 text-slate-400 hover:bg-white/15'}`}
-                >
-                  🏠 부동산 {includeRE ? '포함' : '제외'}
-                </button>
-              )}
               {useAge && <Pill tone="blue">만 {ageNum}→{PENSION_START_AGE}세</Pill>}
               {side > 0 && <Pill tone="green">부업 +{fmtNum(Number(sideMan) || 0)}만</Pill>}
               {promotions.length > 0 && <Pill tone="indigo">진급 {promotions.length}회</Pill>}
@@ -641,6 +658,19 @@ export default function TaxGuide() {
               </div>
             )}
 
+            {realEstate > 0 && (
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <span className="text-[11px] text-slate-500">그래프에 부동산</span>
+                <div className="inline-flex items-center overflow-hidden rounded-lg border border-white/15 text-xs">
+                  <button type="button" onClick={() => setIncludeRE(true)} className={`px-3 py-1 font-medium transition ${includeRE ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:bg-white/10'}`}>
+                    포함
+                  </button>
+                  <button type="button" onClick={() => setIncludeRE(false)} className={`px-3 py-1 font-medium transition ${!includeRE ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:bg-white/10'}`}>
+                    제외
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="mt-3">
               <GrowthChart data={chartRows} xUnit={xUnit} target={target} reachX={reachX} lumpXs={lumpXs} />
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
