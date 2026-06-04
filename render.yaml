@@ -1,0 +1,16 @@
+# Render 무료 배포 설정 (Blueprint)
+# 단일 Node 서비스가 빌드된 프론트(client/dist)와 /api 를 한 주소에서 서빙한다.
+# 사용법: Render 대시보드 → New → Blueprint → 이 레포 선택 (render.yaml 자동 인식)
+services:
+  - type: web
+    name: asset-management-trading
+    runtime: node
+    plan: free
+    buildCommand: npm run install:all && npm --prefix client run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # 안전: 배포 서버는 기본 페이퍼(모의) 모드. 실거래 키는 올리지 않는다.
+      - key: TRADE_MODE
+        value: paper
