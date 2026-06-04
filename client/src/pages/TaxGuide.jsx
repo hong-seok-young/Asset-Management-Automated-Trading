@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calculator, Info, Landmark, PiggyBank, TrendingUp, Wallet } from 'lucide-react'
+import { Calculator, Info, Landmark, LineChart, PiggyBank, TrendingUp, Wallet } from 'lucide-react'
 import { Card, Field, Input, Pill, Select } from '../components/ui.jsx'
 import { fmtNum } from '../lib/format.js'
 import AllocationPie, { COLORS } from '../components/AllocationPie.jsx'
+import GrowthChart from '../components/GrowthChart.jsx'
 
-const LS_KEY = 'taxguide.inputs.v2'
+const LS_KEY = 'taxguide.inputs.v3'
 const load = () => {
   try {
     return JSON.parse(localStorage.getItem(LS_KEY)) || {}
@@ -13,7 +14,10 @@ const load = () => {
   }
 }
 
-// 월 납입 한도(원) — 2026 기준, 박곰희 '노후 우선' 순서로 채운다.
+const PENSION_START_AGE = 65 // 연금 개시(투자기간 기준)
+const PAYOUT_YEARS = 25 // 연금 수령 가정 기간
+
+// 월 납입 한도(원) — 2026 기준
 const MONTHLY_CAP = {
   pension: 500_000, // 연금저축 세액공제 한도 연 600만
   irp: 250_000, // IRP 추가 세액공제 연 300만 (연금저축 합산 900만)
@@ -21,21 +25,37 @@ const MONTHLY_CAP = {
   pensionExtra: 750_000, // 연금계좌 총 1,800만 − 세액공제 900만 = 추가 900만(안세공)
 }
 
-// 월 저축액을 우선순위대로 폭포수 배분
-function allocate(saving) {
+// 우선순위(노후 우선 / 중기목돈 우선)에 따라 월 저축액을 폭포수 배분
+function allocate(saving, priority) {
   let rest = Math.max(0, saving || 0)
   const take = (cap) => {
     const a = Math.min(rest, cap)
     rest -= a
     return a
   }
-  return {
-    pension: take(MONTHLY_CAP.pension),
-    irp: take(MONTHLY_CAP.irp),
-    isa: take(MONTHLY_CAP.isa),
-    pensionExtra: take(MONTHLY_CAP.pensionExtra),
-    cma: rest, // 남는 돈
+  if (priority === 'midterm') {
+    // 20~30대: 중도인출 가능한 ISA 먼저
+    const isa = take(MONTHLY_CAP.isa)
+    const pension = take(MONTHLY_CAP.pension)
+    const irp = take(MONTHLY_CAP.irp)
+    const pensionExtra = take(MONTHLY_CAP.pensionExtra)
+    return { pension, irp, isa, pensionExtra, cma: rest }
   }
+  // 노후 우선(기본): 세액공제부터 꽉
+  const pension = take(MONTHLY_CAP.pension)
+  const irp = take(MONTHLY_CAP.irp)
+  const isa = take(MONTHLY_CAP.isa)
+  const pensionExtra = take(MONTHLY_CAP.pensionExtra)
+  return { pension, irp, isa, pensionExtra, cma: rest }
+}
+
+// 매달 m원씩 y년 적립 시 미래가치(월복리, 기말납입). r=연수익률
+function futureValue(m, years, r) {
+  if (m <= 0 || years <= 0) return 0
+  const months = years * 12
+  if (r <= 0) return m * months
+  const mr = r / 12
+  return m * ((Math.pow(1 + mr, months) - 1) / mr)
 }
 
 export default function TaxGuide() {
@@ -43,21 +63,66 @@ export default function TaxGuide() {
   const [salaryMan, setSalaryMan] = useState(saved.salaryMan ?? '') // 월 실수령액(세후, 만원)
   const [savingMan, setSavingMan] = useState(saved.savingMan ?? '') // 월 저축액(만원)
   const [hasEmergency, setHasEmergency] = useState(saved.hasEmergency ?? 'no')
+  const [age, setAge] = useState(saved.age ?? '') // 만 나이
+  const [grossMan, setGrossMan] = useState(saved.grossMan ?? '') // 세전 연봉(만원, 선택)
+  const [livingMan, setLivingMan] = useState(saved.livingMan ?? '') // 월 생활비(만원, 선택)
+  const [returnPct, setReturnPct] = useState(saved.returnPct ?? '6') // 예상 연 수익률(%)
+  const [prioritySel, setPrioritySel] = useState(saved.prioritySel ?? 'retire') // retire | midterm
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify({ salaryMan, savingMan, hasEmergency }))
-  }, [salaryMan, savingMan, hasEmergency])
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({ salaryMan, savingMan, hasEmergency, age, grossMan, livingMan, returnPct, prioritySel }),
+    )
+  }, [salaryMan, savingMan, hasEmergency, age, grossMan, livingMan, returnPct, prioritySel])
 
-  const salary = (Number(salaryMan) || 0) * 10000 // 월 실수령액(세후, 원)
+  const salary = (Number(salaryMan) || 0) * 10000 // 월 실수령액(원)
   const saving = (Number(savingMan) || 0) * 10000 // 월저축(원)
-  const annualNet = salary * 12 // 연 실수령(세후)
-  // 세액공제율: 총급여 5,500만(≈ 세후 연 4,600만) 경계로 추정. 실수령 입력이라 근사값.
-  const rate = annualNet > 46_000_000 ? 0.132 : 0.165
-  const emergencyTarget = salary * 3 // 비상금 권장(세후 약 3개월치)
+  const grossYear = (Number(grossMan) || 0) * 10000 // 세전 연봉(원)
+  const living = (Number(livingMan) || 0) * 10000 // 월 생활비(원)
+  const ageNum = Number(age) || 0
+  const ret = (Number(returnPct) || 0) / 100
+  const annualNet = salary * 12
 
-  const alloc = useMemo(() => allocate(saving), [saving])
+  // 세액공제율: 세전 연봉 있으면 정확, 없으면 실수령 기준 추정
+  const rate = grossYear > 0 ? (grossYear > 55_000_000 ? 0.132 : 0.165) : annualNet > 46_000_000 ? 0.132 : 0.165
+  const rateBasis = grossYear > 0 ? '세전 연봉 기준' : '실수령 기준 추정'
+
+  // 비상금: 월 생활비 있으면 생활비×3, 없으면 실수령×3
+  const emergencyTarget = (living > 0 ? living : salary) * 3
+  const emgBasis = living > 0 ? '월 생활비 3개월' : '월 실수령 3개월'
+
+  // 노후 우선(기본, 세액공제부터 챙김) / 중기목돈 우선(ISA 먼저)
+  const priority = prioritySel === 'midterm' ? 'midterm' : 'retire'
+  const alloc = useMemo(() => allocate(saving, priority), [saving, priority])
+
   const deductibleYear = (alloc.pension + alloc.irp) * 12 // 세액공제 대상(연)
   const refundYear = Math.round(deductibleYear * rate) // 예상 환급(연)
+
+  // 미래 시뮬레이션
+  const horizon = ageNum > 0 ? Math.max(1, PENSION_START_AGE - ageNum) : 30 // 투자기간(년)
+  const investedMonthly = alloc.pension + alloc.irp + alloc.isa + alloc.pensionExtra // 실제 투자 금액(CMA 제외)
+  const retireMonthly = alloc.pension + alloc.irp + alloc.pensionExtra // 연금성 자산
+  const sim = useMemo(() => {
+    const rows = []
+    for (let y = 1; y <= horizon; y++) {
+      const principal = investedMonthly * 12 * y
+      const total = futureValue(investedMonthly, y, ret)
+      rows.push({ year: y, principal: Math.round(principal), profit: Math.round(total - principal) })
+    }
+    const finalTotal = futureValue(investedMonthly, horizon, ret)
+    const finalPrincipal = investedMonthly * 12 * horizon
+    const retireFV = futureValue(retireMonthly, horizon, ret)
+    const monthlyPension = Math.round(retireFV / (PAYOUT_YEARS * 12))
+    return {
+      rows,
+      finalTotal: Math.round(finalTotal),
+      finalPrincipal: Math.round(finalPrincipal),
+      finalProfit: Math.round(finalTotal - finalPrincipal),
+      monthlyPension,
+      cumulativeRefund: refundYear * horizon,
+    }
+  }, [investedMonthly, retireMonthly, horizon, ret, refundYear])
 
   const buckets = [
     { key: 'pension', name: '연금저축', role: '노후 핵심 · 세액공제', concept: '자산배분 ETF', monthly: alloc.pension, capM: MONTHLY_CAP.pension, Icon: PiggyBank },
@@ -91,6 +156,36 @@ export default function TaxGuide() {
             </Select>
           </Field>
         </div>
+
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <div className="mb-2 text-xs font-medium text-slate-400">정밀 · 시뮬레이션 설정 (선택)</div>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <Field label="만 나이" hint="투자기간·순서">
+              <Input type="number" inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} placeholder="예: 35" />
+            </Field>
+            <Field label="세전 연봉 (만원)" hint="정확한 공제율">
+              <Input type="number" inputMode="numeric" value={grossMan} onChange={(e) => setGrossMan(e.target.value)} placeholder="선택" />
+            </Field>
+            <Field label="월 생활비 (만원)" hint="비상금 계산">
+              <Input type="number" inputMode="numeric" value={livingMan} onChange={(e) => setLivingMan(e.target.value)} placeholder="선택" />
+            </Field>
+            <Field label="예상 연 수익률" hint="복리 가정">
+              <Select value={returnPct} onChange={(e) => setReturnPct(e.target.value)}>
+                <option value="3">3% (보수적)</option>
+                <option value="5">5%</option>
+                <option value="6">6% (중립)</option>
+                <option value="7">7%</option>
+                <option value="8">8% (공격적)</option>
+              </Select>
+            </Field>
+            <Field label="우선순위" hint="20·30대 중기목돈이면 ISA 먼저">
+              <Select value={priority} onChange={(e) => setPrioritySel(e.target.value)}>
+                <option value="retire">노후 우선 (연금 먼저)</option>
+                <option value="midterm">중기목돈 우선 (ISA 먼저)</option>
+              </Select>
+            </Field>
+          </div>
+        </div>
       </Card>
 
       {!hasInput ? (
@@ -100,7 +195,7 @@ export default function TaxGuide() {
             <div>
               월 실수령액과 월 저축액을 입력하면
               <br />
-              절세계좌별 추천 배분을 보여드려요.
+              절세계좌별 추천 배분과 미래 자산을 보여드려요.
             </div>
           </div>
         </Card>
@@ -113,18 +208,19 @@ export default function TaxGuide() {
                 <div className="text-sm text-slate-400">예상 연 세액공제 환급액</div>
                 <div className="tnum mt-1 text-3xl font-bold text-emerald-400">{fmtNum(refundYear)}원</div>
                 <div className="mt-1 text-xs text-slate-500">
-                  연 실수령 {fmtNum(Math.round(annualNet / 10000))}만원(세후) → 세액공제율 {(rate * 100).toFixed(1)}% (추정) · 공제대상 {fmtNum(Math.round(deductibleYear / 10000))}만원/년
+                  세액공제율 {(rate * 100).toFixed(1)}% ({rateBasis}) · 공제대상 {fmtNum(Math.round(deductibleYear / 10000))}만원/년
                 </div>
               </div>
               <div>
                 <div className="text-sm text-slate-400">권장 비상금 (CMA)</div>
                 <div className="tnum mt-1 text-2xl font-bold">{fmtNum(emergencyTarget)}원</div>
-                <div className="mt-1">
+                <div className="mt-1 flex items-center gap-2">
                   {hasEmergency === 'no' ? (
-                    <Pill tone="amber">아직 없음 — 투자보다 먼저 채우기</Pill>
+                    <Pill tone="amber">아직 없음 — 먼저 채우기</Pill>
                   ) : (
-                    <Pill tone="green">확보됨 — 바로 투자 진행</Pill>
+                    <Pill tone="green">확보됨 — 바로 투자</Pill>
                   )}
+                  <span className="text-[11px] text-slate-500">{emgBasis}</span>
                 </div>
               </div>
             </div>
@@ -132,10 +228,52 @@ export default function TaxGuide() {
               <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                 <Info size={14} className="mt-0.5 shrink-0" />
                 <span>
-                  아래 배분은 <b>비상금을 다 모은 뒤</b> 기준이에요. 그 전에는 매달 저축을 먼저 CMA에 모아 {fmtNum(emergencyTarget)}원(약 3개월치)을 만든 다음 시작하세요.
+                  아래 배분은 <b>비상금을 다 모은 뒤</b> 기준이에요. 그 전에는 매달 저축을 먼저 CMA에 모아 {fmtNum(emergencyTarget)}원을 만든 다음 시작하세요.
                 </span>
               </div>
             )}
+          </Card>
+
+          {/* 미래 자산 시뮬레이션 */}
+          <Card className="p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <LineChart size={18} className="text-emerald-300" />
+              <h3 className="text-base font-semibold">미래 자산 시뮬레이션</h3>
+              <Pill tone="slate">
+                {ageNum > 0 ? `${ageNum}세 → ${PENSION_START_AGE}세` : '기본 30년'} · 수익률 {returnPct}%
+              </Pill>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <div className="text-xs text-slate-400">{horizon}년 후 예상 총 평가액</div>
+                <div className="tnum mt-1 text-2xl font-bold">{fmtNum(sim.finalTotal)}원</div>
+                <div className="tnum mt-0.5 text-[11px] text-slate-500">
+                  원금 {fmtNum(Math.round(sim.finalPrincipal / 10000))}만 + <span className="text-emerald-400">수익 {fmtNum(Math.round(sim.finalProfit / 10000))}만</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400">예상 월 연금 ({PAYOUT_YEARS}년 수령)</div>
+                <div className="tnum mt-1 text-2xl font-bold text-indigo-300">{fmtNum(sim.monthlyPension)}원</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">연금저축·IRP 기준</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400">{horizon}년 누적 세액공제</div>
+                <div className="tnum mt-1 text-2xl font-bold text-emerald-400">{fmtNum(sim.cumulativeRefund)}원</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">매년 환급액 합계</div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <GrowthChart data={sim.rows} />
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full" style={{ background: '#818cf8' }} /> 원금(누적 납입)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full" style={{ background: '#34d399' }} /> 운용 수익
+                </span>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500">※ CMA(대기자금) 제외, 매달 같은 금액을 {returnPct}% 복리로 가정한 단순 추정입니다. 실제 수익률·세금에 따라 달라져요.</p>
           </Card>
 
           {/* 배분 시각화 + 계좌별 */}
@@ -193,7 +331,7 @@ export default function TaxGuide() {
           </div>
 
           <p className="px-1 text-[11px] leading-relaxed text-slate-500">
-            ※ 박곰희 작가의 절세계좌 전략과 2026년 세제 한도를 참고한 <b>참고용 가이드</b>입니다. 세액공제율은 실수령액 기준 추정이며, 투자 자문·권유가 아닙니다. 실제 납입·투자 판단과 손익은 본인 책임이며, 세부 한도·요건은 가입 증권사/국세청 기준을 확인하세요.
+            ※ 박곰희 작가의 절세계좌 전략과 2026년 세제 한도를 참고한 <b>참고용 가이드</b>입니다. 세액공제율·미래 자산은 추정값이며, 투자 자문·권유가 아닙니다. 실제 납입·투자 판단과 손익은 본인 책임이며, 세부 한도·요건은 가입 증권사/국세청 기준을 확인하세요.
           </p>
         </>
       )}
