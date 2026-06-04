@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calculator, Info, Landmark, LineChart, PiggyBank, TrendingUp, Wallet } from 'lucide-react'
+import { Calculator, Info, Landmark, LineChart, PiggyBank, Share2, TrendingUp, Wallet } from 'lucide-react'
 import { Card, Field, Input, Pill, Select } from '../components/ui.jsx'
 import { fmtNum } from '../lib/format.js'
 import AllocationPie, { COLORS } from '../components/AllocationPie.jsx'
@@ -10,6 +10,18 @@ const LS_KEY = 'taxguide.inputs.v3'
 const load = () => {
   try {
     return JSON.parse(localStorage.getItem(LS_KEY)) || {}
+  } catch {
+    return {}
+  }
+}
+
+// 공유 링크(#/?key=val...)로 들어오면 그 값으로 시작
+const fromUrl = () => {
+  try {
+    const h = window.location.hash
+    const qi = h.indexOf('?')
+    if (qi < 0) return {}
+    return Object.fromEntries(new URLSearchParams(h.slice(qi + 1)).entries())
   } catch {
     return {}
   }
@@ -60,7 +72,8 @@ function futureValue(m, years, r) {
 }
 
 export default function TaxGuide() {
-  const saved = load()
+  const saved = { ...load(), ...fromUrl() }
+  const [copied, setCopied] = useState(false)
   const [salaryMan, setSalaryMan] = useState(saved.salaryMan ?? '') // 월 실수령액(세후, 만원)
   const [savingMan, setSavingMan] = useState(saved.savingMan ?? '') // 월 저축액(만원)
   const [hasEmergency, setHasEmergency] = useState(saved.hasEmergency ?? 'no')
@@ -135,6 +148,20 @@ export default function TaxGuide() {
   const pieData = buckets.filter((b) => b.monthly > 0).map((b) => ({ name: b.name, value: Math.round(b.monthly) }))
   const hasInput = salary > 0 && saving > 0
 
+  const shareLink = async () => {
+    const params = { salaryMan, savingMan, hasEmergency, age, grossMan, livingMan, returnPct, prioritySel }
+    const p = new URLSearchParams()
+    for (const [k, v] of Object.entries(params)) if (v !== '' && v != null) p.set(k, v)
+    const url = `${window.location.origin}${window.location.pathname}#/?${p.toString()}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      window.prompt('이 링크를 복사하세요', url)
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* 입력 */}
@@ -158,6 +185,22 @@ export default function TaxGuide() {
           </Field>
         </div>
 
+        <div className="mt-3">
+          <input
+            type="range"
+            min="0"
+            max="300"
+            step="5"
+            value={Number(savingMan) || 0}
+            onChange={(e) => setSavingMan(e.target.value)}
+            className="w-full accent-indigo-400"
+          />
+          <div className="mt-1 flex justify-between text-[11px] text-slate-500">
+            <span>월 저축 슬라이더: {fmtNum(Number(savingMan) || 0)}만원</span>
+            <span>0 ~ 300만</span>
+          </div>
+        </div>
+
         <div className="mt-3 border-t border-white/10 pt-3">
           <div className="mb-2 text-xs font-medium text-slate-400">정밀 · 시뮬레이션 설정 (선택)</div>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -170,14 +213,16 @@ export default function TaxGuide() {
             <Field label="월 생활비 (만원)" hint="비상금 계산">
               <Input type="number" inputMode="numeric" value={livingMan} onChange={(e) => setLivingMan(e.target.value)} placeholder="선택" />
             </Field>
-            <Field label="예상 연 수익률" hint="복리 가정">
-              <Select value={returnPct} onChange={(e) => setReturnPct(e.target.value)}>
-                <option value="3">3% (보수적)</option>
-                <option value="5">5%</option>
-                <option value="6">6% (중립)</option>
-                <option value="7">7%</option>
-                <option value="8">8% (공격적)</option>
-              </Select>
+            <Field label={`예상 연 수익률 — ${returnPct}%`} hint="복리 가정 (슬라이드)">
+              <input
+                type="range"
+                min="3"
+                max="10"
+                step="0.5"
+                value={returnPct}
+                onChange={(e) => setReturnPct(e.target.value)}
+                className="mt-2 w-full accent-indigo-400"
+              />
             </Field>
             <Field label="우선순위" hint="20·30대 중기목돈이면 ISA 먼저">
               <Select value={priority} onChange={(e) => setPrioritySel(e.target.value)}>
@@ -202,6 +247,15 @@ export default function TaxGuide() {
         </Card>
       ) : (
         <>
+          <div className="flex justify-end">
+            <button
+              onClick={shareLink}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-white/15"
+            >
+              <Share2 size={14} /> {copied ? '링크 복사됨!' : '결과 링크 복사'}
+            </button>
+          </div>
+
           {/* 요약 */}
           <Card className="p-5">
             <div className="grid gap-4 sm:grid-cols-2">
