@@ -61,6 +61,31 @@ export async function getQuotes(symbols) {
   return results
 }
 
+// 전술적 리밸런싱용 시장 신호(환율·미국지수·미국채금리)를 한 번에 조회한다.
+// 각 심볼을 1년 차트로 받아 현재가 + 52주 고/저 + 고점대비(%) 를 계산해 돌려준다.
+const SIGNAL_SYMBOLS = { fx: 'KRW=X', sp500: '^GSPC', nasdaq: '^IXIC', ust10y: '^TNX' }
+
+export async function getMarketSignals() {
+  const entries = await Promise.all(
+    Object.entries(SIGNAL_SYMBOLS).map(async ([key, symbol]) => {
+      try {
+        const data = await fetchJson(`/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d`)
+        const result = data?.chart?.result?.[0]
+        const m = result?.meta || {}
+        const closes = (result?.indicators?.quote?.[0]?.close || []).filter((x) => x != null)
+        const price = m.regularMarketPrice ?? closes[closes.length - 1] ?? null
+        const high52 = m.fiftyTwoWeekHigh ?? (closes.length ? Math.max(...closes) : null)
+        const low52 = m.fiftyTwoWeekLow ?? (closes.length ? Math.min(...closes) : null)
+        const fromHigh = price != null && high52 ? ((price - high52) / high52) * 100 : null
+        return [key, { symbol, price, high52, low52, fromHigh }]
+      } catch (e) {
+        return [key, { symbol, error: e.message }]
+      }
+    }),
+  )
+  return { asOf: Date.now(), ...Object.fromEntries(entries) }
+}
+
 export async function searchSymbols(query) {
   // /v1/finance/search 는 한글(비ASCII) 쿼리에 400 "Invalid Search Query" 를 반환한다.
   // /v6/finance/autocomplete 는 한글 회사명·영어·티커를 모두 지원하고 한글 종목명도 돌려준다.

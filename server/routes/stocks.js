@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getChart, getQuotes, searchSymbols } from '../services/yahoo.js'
+import { getChart, getMarketSignals, getQuotes, searchSymbols } from '../services/yahoo.js'
 
 const router = Router()
 
@@ -21,6 +21,15 @@ router.get('/search', async (req, res) => {
   try {
     const q = String(req.query.q || '').trim()
     res.json(q ? await searchSymbols(q) : [])
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// GET /api/stocks/market-signals — 환율·미국지수·미국채금리 (리밸런싱 국면 판정용)
+router.get('/market-signals', async (req, res) => {
+  try {
+    res.json(await getMarketSignals())
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

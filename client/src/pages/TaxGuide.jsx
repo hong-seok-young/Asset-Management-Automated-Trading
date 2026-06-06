@@ -5,6 +5,7 @@ import { fmtNum } from '../lib/format.js'
 import AllocationPie, { COLORS } from '../components/AllocationPie.jsx'
 import GrowthChart from '../components/GrowthChart.jsx'
 import AccountGuide from '../components/AccountGuide.jsx'
+import AccountPortfolios from '../components/AccountPortfolios.jsx'
 
 const LS_KEY = 'taxguide.inputs.v4'
 const load = () => {
@@ -774,6 +775,19 @@ export default function TaxGuide() {
               <p className="text-[11px] leading-relaxed text-slate-500">
                 ※ 박곰희 작가의 절세계좌 전략과 2026년 세제 한도를 참고한 <b>참고용 가이드</b>입니다. 추정값이며 투자 자문이 아닙니다. 세부 한도·요건은 증권사/국세청 기준을 확인하세요.
               </p>
+            </div>
+          </details>
+
+          {/* 계좌별 종목 추천 · 상황별 리밸런싱 — 접이식 (기본 닫힘) */}
+          <details className="rounded-2xl border border-white/10 bg-white/[0.03]">
+            <summary className="flex cursor-pointer select-none items-center gap-2 px-4 py-3 text-sm font-semibold marker:text-slate-500">
+              <TrendingUp size={16} className="text-amber-300" />
+              계좌별 종목 추천 · 상황별 리밸런싱
+              <Pill tone="amber" className="ml-1">공격형</Pill>
+              <span className="ml-auto text-[11px] font-normal text-slate-500">펼치기</span>
+            </summary>
+            <div className="border-t border-white/10 p-4">
+              <AccountPortfolios alloc={alloc} />
             </div>
           </details>
         </>

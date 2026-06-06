@@ -8,6 +8,7 @@ export const stocksApi = {
   search: (q) => api.get('/stocks/search', { params: { q } }).then((r) => r.data),
   chart: (symbol, range = '1mo') =>
     api.get('/stocks/chart', { params: { symbol, range } }).then((r) => r.data),
+  marketSignals: () => api.get('/stocks/market-signals').then((r) => r.data),
 }
 
 export const cryptoApi = {
