@@ -6,6 +6,8 @@ import AllocationPie, { COLORS } from '../components/AllocationPie.jsx'
 import GrowthChart from '../components/GrowthChart.jsx'
 import AccountGuide from '../components/AccountGuide.jsx'
 import AccountPortfolios from '../components/AccountPortfolios.jsx'
+import InfoTip from '../components/InfoTip.jsx'
+import { EXPLAIN, expectedReturnFromAlloc } from '../lib/portfolios.js'
 
 const LS_KEY = 'taxguide.inputs.v4'
 const load = () => {
@@ -306,14 +308,15 @@ export default function TaxGuide() {
   const [lumps, setLumps] = useState(() => toArr(saved.lumps))
   const [grossMan, setGrossMan] = useState(saved.grossMan ?? '')
   const [returnPct, setReturnPct] = useState(saved.returnPct ?? '5')
+  const [returnMode, setReturnMode] = useState(saved.returnMode ?? 'auto') // 'auto'=종목 평균 블렌드 / 'manual'=직접
   const [prioritySel, setPrioritySel] = useState(saved.prioritySel ?? 'retire')
 
   useEffect(() => {
     localStorage.setItem(
       LS_KEY,
-      JSON.stringify({ salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, includeRE, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel }),
+      JSON.stringify({ salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, includeRE, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, returnMode, prioritySel }),
     )
-  }, [salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, includeRE, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, prioritySel])
+  }, [salaryMan, sideMan, spendMan, age, reEok, stockMan, cashMan, includeRE, targetEok, targetYear, hasEmergency, raisePct, promotions, lumps, grossMan, returnPct, returnMode, prioritySel])
 
   const nextYear = cy + 1
   const thisYm = `${cy}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
@@ -338,7 +341,6 @@ export default function TaxGuide() {
   const target = (parseFloat(targetEok) || 0) * 100_000_000
   const tYear = Number(targetYear) || 0
   const ageNum = Number(age) || 0
-  const ret = (Number(returnPct) || 0) / 100
   const raise = (Number(raisePct) || 0) / 100
   const annualNet = salary * 12
 
@@ -351,6 +353,11 @@ export default function TaxGuide() {
   const alloc = useMemo(() => allocate(saving, priority), [saving, priority])
   const deductibleYear = (alloc.pension + alloc.irp) * 12
   const refundYear = Math.round(deductibleYear * rate)
+
+  // 예상 연 수익률: 'auto'면 추천 포트폴리오 종목별 연평균 수익률 블렌드, 'manual'이면 슬라이더 값
+  const autoReturn = useMemo(() => expectedReturnFromAlloc(alloc), [alloc])
+  const effReturnPct = returnMode === 'auto' ? autoReturn : Number(returnPct) || 0
+  const ret = effReturnPct / 100
 
   const now = new Date()
   const startYear = now.getFullYear()
@@ -415,6 +422,7 @@ export default function TaxGuide() {
       raisePct,
       grossMan,
       returnPct,
+      returnMode,
       prioritySel,
       promotions: promotions.length ? JSON.stringify(promotions) : '',
       lumps: lumps.length ? JSON.stringify(lumps) : '',
@@ -502,13 +510,31 @@ export default function TaxGuide() {
         </div>
 
         {/* 접이식 설정들 */}
-        <Section title={`⚙️ 가정 설정 — 월급 상승 ${raisePct}% · 수익률 ${returnPct}%`}>
+        <Section title={`⚙️ 가정 설정 — 월급 상승 ${raisePct}% · 수익률 ${effReturnPct.toFixed(1)}%${returnMode === 'auto' ? ' (종목 평균)' : ''}`}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field label={`연 월급 상승률 ${raisePct}%`}>
               <input type="range" min="0" max="10" step="0.5" value={raisePct} onChange={(e) => setRaisePct(e.target.value)} className="mt-2 w-full accent-indigo-400" />
             </Field>
-            <Field label={`예상 연 수익률 ${returnPct}%`} hint="주식·저축에 적용">
-              <input type="range" min="0" max="12" step="0.5" value={returnPct} onChange={(e) => setReturnPct(e.target.value)} className="mt-2 w-full accent-indigo-400" />
+            <Field
+              label={
+                <span className="inline-flex items-center gap-1">
+                  예상 연 수익률 {effReturnPct.toFixed(1)}%
+                  <InfoTip title={EXPLAIN.return.title} body={EXPLAIN.return.body} />
+                </span>
+              }
+              hint={returnMode === 'auto' ? '추천 종목 연평균 수익률 블렌드 (자동)' : '직접 설정'}
+            >
+              <div className="mt-1 inline-flex w-full overflow-hidden rounded-xl border border-white/10 text-xs">
+                <button type="button" onClick={() => setReturnMode('auto')} className={`flex-1 px-2 py-1.5 font-medium transition ${returnMode === 'auto' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:bg-white/10'}`}>
+                  종목 평균 {autoReturn.toFixed(1)}%
+                </button>
+                <button type="button" onClick={() => setReturnMode('manual')} className={`flex-1 px-2 py-1.5 font-medium transition ${returnMode === 'manual' ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:bg-white/10'}`}>
+                  직접
+                </button>
+              </div>
+              {returnMode === 'manual' && (
+                <input type="range" min="0" max="15" step="0.5" value={returnPct} onChange={(e) => setReturnPct(e.target.value)} className="mt-2 w-full accent-indigo-400" />
+              )}
             </Field>
             <Field label="세전 연봉 (만원)" hint="정확한 공제율">
               <NumberInput value={grossMan} onChange={setGrossMan} placeholder="선택" />
@@ -685,7 +711,7 @@ export default function TaxGuide() {
 
             {proj.dipsAfterReach && <div className="mt-2 text-[11px] text-amber-300">※ 목표 달성 후 목돈 지출로 일시적으로 목표 아래로 내려갈 수 있어요.</div>}
             <p className="mt-2 text-[11px] text-slate-500">
-              ※ 시작 시드 = {includeRE ? '부동산+주식+현금' : '주식+현금 (부동산 제외)'}. <b>{includeRE ? '부동산·현금(CMA)' : '현금(CMA)'}은 현상유지</b>, <b>주식·매월 저축만 {returnPct}% 복리</b>로 성장 가정. 소비·부업 일정, 월급만 매년 {raisePct}%(진급 시 점프) 상승.
+              ※ 시작 시드 = {includeRE ? '부동산+주식+현금' : '주식+현금 (부동산 제외)'}. <b>{includeRE ? '부동산·현금(CMA)' : '현금(CMA)'}은 현상유지</b>, <b>주식·매월 저축만 {effReturnPct.toFixed(1)}% 복리</b>로 성장 가정{returnMode === 'auto' ? ' (추천 종목 연평균 블렌드)' : ''}. 소비·부업 일정, 월급만 매년 {raisePct}%(진급 시 점프) 상승.
             </p>
           </Card>
 

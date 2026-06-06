@@ -16,6 +16,7 @@ export const KLASS = {
 
 // ── 계좌별 베이스 포트폴리오 (공격형·사회초년생) ────────────────────
 // pension/pensionExtra/irp/isa/cma 키는 TaxGuide 의 월 배분액(alloc)과 매칭된다.
+// annualReturn = 해당 자산의 장기 연평균 수익률(CAGR) 추정치(%). 참고용 가정이며 미래를 보장하지 않는다.
 export const BASE_ACCOUNTS = [
   {
     key: 'pension',
@@ -24,10 +25,10 @@ export const BASE_ACCOUNTS = [
     constraint: '국내상장 ETF·펀드만 (개별주식 불가)',
     equityFloor: 60,
     holdings: [
-      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '미국 대형주 코어', weight: 50, expense: 0.0068 },
-      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '성장(빅테크)', weight: 30, expense: 0.0068 },
-      { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15 },
-      { ticker: '481060', name: 'KODEX 미국30년국채액티브(H)', klass: 'longBond', role: '위기 완충', weight: 8, expense: 0.05 },
+      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '미국 대형주 코어', weight: 50, expense: 0.0068, annualReturn: 10 },
+      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '성장(빅테크)', weight: 30, expense: 0.0068, annualReturn: 13 },
+      { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15, annualReturn: 7 },
+      { ticker: '481060', name: 'KODEX 미국30년국채액티브(H)', klass: 'longBond', role: '위기 완충', weight: 8, expense: 0.05, annualReturn: 4 },
     ],
   },
   {
@@ -38,10 +39,10 @@ export const BASE_ACCOUNTS = [
     equityFloor: 60,
     sameAs: 'pension',
     holdings: [
-      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '미국 대형주 코어', weight: 50, expense: 0.0068 },
-      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '성장(빅테크)', weight: 30, expense: 0.0068 },
-      { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15 },
-      { ticker: '481060', name: 'KODEX 미국30년국채액티브(H)', klass: 'longBond', role: '위기 완충', weight: 8, expense: 0.05 },
+      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '미국 대형주 코어', weight: 50, expense: 0.0068, annualReturn: 10 },
+      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '성장(빅테크)', weight: 30, expense: 0.0068, annualReturn: 13 },
+      { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15, annualReturn: 7 },
+      { ticker: '481060', name: 'KODEX 미국30년국채액티브(H)', klass: 'longBond', role: '위기 완충', weight: 8, expense: 0.05, annualReturn: 4 },
     ],
   },
   {
@@ -51,9 +52,9 @@ export const BASE_ACCOUNTS = [
     constraint: '국내상장 ETF·펀드만 · 위험자산 70% 한도',
     equityFloor: 60,
     holdings: [
-      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '위험자산 코어', weight: 45, expense: 0.0068 },
-      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '위험자산 성장', weight: 25, expense: 0.0068 },
-      { ticker: '434060', name: 'KODEX TDF2050액티브', klass: 'tdf', role: '안전자산 30% 의무(내부 주식 ~80%)', weight: 30, expense: 0.3 },
+      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '위험자산 코어', weight: 45, expense: 0.0068, annualReturn: 10 },
+      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '위험자산 성장', weight: 25, expense: 0.0068, annualReturn: 13 },
+      { ticker: '434060', name: 'KODEX TDF2050액티브', klass: 'tdf', role: '안전자산 30% 의무(내부 주식 ~80%)', weight: 30, expense: 0.3, annualReturn: 7.5 },
     ],
   },
   {
@@ -63,9 +64,9 @@ export const BASE_ACCOUNTS = [
     constraint: '국내상장 ETF + 국내 개별주식 (해외주식 직접매수 불가)',
     equityFloor: 55,
     holdings: [
-      { ticker: '458730', name: 'TIGER 미국배당다우존스(SCHD)', klass: 'dividend', role: '월배당·분리과세 핵심', weight: 40, expense: 0.11 },
-      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '성장', weight: 40, expense: 0.0068 },
-      { ticker: '329200', name: 'TIGER 리츠부동산인프라', klass: 'reit', role: '배당·분리과세', weight: 20, expense: 0.29 },
+      { ticker: '458730', name: 'TIGER 미국배당다우존스(SCHD)', klass: 'dividend', role: '월배당·분리과세 핵심', weight: 40, expense: 0.11, annualReturn: 11 },
+      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '성장', weight: 40, expense: 0.0068, annualReturn: 13 },
+      { ticker: '329200', name: 'TIGER 리츠부동산인프라', klass: 'reit', role: '배당·분리과세', weight: 20, expense: 0.29, annualReturn: 7 },
     ],
   },
   {
@@ -75,10 +76,13 @@ export const BASE_ACCOUNTS = [
     constraint: 'RP/발행어음 자동운용 (또는 파킹형 ETF)',
     equityFloor: 0,
     holdings: [
-      { ticker: '459580', name: 'KODEX CD금리액티브', klass: 'cash', role: '수시입출 파킹', weight: 100, expense: 0.02 },
+      { ticker: '459580', name: 'KODEX CD금리액티브', klass: 'cash', role: '수시입출 파킹', weight: 100, expense: 0.02, annualReturn: 3.5 },
     ],
   },
 ]
+
+// 투자(성장) 계좌 — CMA(현금성 파킹)는 수익률 블렌드에서 제외
+export const INVEST_ACCOUNT_KEYS = ['pension', 'pensionExtra', 'irp', 'isa']
 
 // ── 시장 신호 → 국면 판정 ───────────────────────────────────────────
 // signals: { fx:{price}, sp500:{fromHigh}, nasdaq:{fromHigh}, ust10y:{price} }
@@ -222,6 +226,30 @@ export function blendedExpense(holdings) {
   return holdings.reduce((s, h) => s + h.expense * h.weight, 0) / tot
 }
 
+// 가중평균 연평균 수익률(%) — 종목 비중으로 블렌드
+export function blendedReturn(holdings) {
+  const tot = holdings.reduce((s, h) => s + h.weight, 0) || 1
+  return holdings.reduce((s, h) => s + (h.annualReturn || 0) * h.weight, 0) / tot
+}
+
+// 월 배분액(alloc)으로 가중한 전체 추천 포트폴리오의 기대 연평균 수익률(%).
+// 베이스 비중(장기 기준, 전술 틸트 제외)을 쓰고, CMA(현금성)는 제외한다.
+// 배분액 정보가 없으면 연금저축 베이스 블렌드를 대표값으로 돌려준다.
+export function expectedReturnFromAlloc(alloc = {}) {
+  let wSum = 0
+  let acc = 0
+  for (const a of BASE_ACCOUNTS) {
+    if (!INVEST_ACCOUNT_KEYS.includes(a.key)) continue
+    const m = Math.max(0, alloc[a.key] || 0)
+    if (m <= 0) continue
+    acc += blendedReturn(a.holdings) * m
+    wSum += m
+  }
+  if (wSum > 0) return acc / wSum
+  const p = BASE_ACCOUNTS.find((a) => a.key === 'pension')
+  return blendedReturn(p.holdings)
+}
+
 // ── 기능별 설명 팝업 텍스트 (?) ─────────────────────────────────────
 export const EXPLAIN = {
   fx: {
@@ -271,5 +299,9 @@ export const EXPLAIN = {
   expense: {
     title: '총보수(보수율)란',
     body: '운용사가 떼는 연간 수수료입니다. 같은 지수를 따르는 ETF면 보수가 낮을수록 장기 수익에 유리합니다. 예) 0.0068%는 1,000만원당 연 680원 수준으로 사실상 0에 수렴합니다.',
+  },
+  return: {
+    title: '예상 수익률 — 종목 평균은 어떻게 나오나',
+    body: '각 종목의 장기 연평균 수익률(CAGR) 추정치를 비중으로 가중평균한 값입니다(예: 미국S&P500 10% · 나스닥100 13% · 금 7% · 장기채 4% · 배당 11% · TDF 7.5%). 자산 성장 그래프의 수익률이 이 블렌드로 자동 설정돼, 추천 종목 구성과 일관되게 미래 자산을 추정합니다. 과거 평균일 뿐 미래를 보장하지 않습니다.',
   },
 }

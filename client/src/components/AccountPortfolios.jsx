@@ -11,6 +11,7 @@ import {
   MODES,
   REGIME_LABEL,
   blendedExpense,
+  blendedReturn,
   classifyRegime,
   regimeSummary,
   tiltAccount,
@@ -63,7 +64,7 @@ function HoldingRow({ h, monthly }) {
           {explain && <InfoTip title={explain.title} body={explain.body} />}
         </div>
         <div className="truncate text-[11px] text-slate-500">
-          {h.ticker} · {h.role} · 보수 {h.expense < 0.01 ? h.expense.toFixed(4) : h.expense.toFixed(2)}%
+          {h.ticker} · {h.role} · 보수 {h.expense < 0.01 ? h.expense.toFixed(4) : h.expense.toFixed(2)}% · 연평균 ~{h.annualReturn}%
         </div>
       </div>
       <div className="shrink-0 text-right">
@@ -188,6 +189,7 @@ export default function AccountPortfolios({ alloc }) {
           const tilted = tiltAccount(acc, regime, mode)
           const monthly = Math.round(alloc?.[acc.key] || 0)
           const exp = blendedExpense(tilted)
+          const ret = blendedReturn(tilted)
           return (
             <Card key={acc.key} className="p-3.5">
               <div className="flex items-start justify-between gap-2">
@@ -205,6 +207,7 @@ export default function AccountPortfolios({ alloc }) {
                     <div className="text-[11px] text-slate-500">배분액 0</div>
                   )}
                   <div className="text-[10px] text-slate-500">평균보수 {exp < 0.01 ? exp.toFixed(4) : exp.toFixed(2)}%</div>
+                  {acc.key !== 'cma' && <div className="text-[10px] text-emerald-400/80">기대수익 ~{ret.toFixed(1)}%</div>}
                 </div>
               </div>
               <div className="mt-2 rounded-lg bg-white/[0.02] px-2.5 py-1.5 text-[10px] text-slate-500">📌 {acc.constraint}</div>
