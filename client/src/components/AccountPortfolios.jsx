@@ -21,9 +21,11 @@ const ACCOUNT_ICON = { pension: PiggyBank, pensionExtra: PiggyBank, irp: Landmar
 const LEVEL_TONE = { high: 'amber', low: 'blue', mid: 'slate' }
 const LEVELS = ['low', 'mid', 'high']
 
+// 국내상장 ETF 티커(6자리) → Yahoo 심볼(.KS). 시세 자동조회용.
+const toYahoo = (ticker) => `${ticker}.KS`
+
 // 신호 1개 카드 (값 + 상태 배지 + 설명 팝업 + 수동 조정 select)
 function SignalCard({ icon: Icon, label, explainKey, regimeKey, item, override, onOverride, fmtVal }) {
-  const level = override ?? item?.level ?? null
   return (
     <div className="rounded-xl bg-white/[0.03] p-3">
       <div className="mb-1 flex items-center gap-1.5 text-[11px] text-slate-400">
@@ -32,7 +34,7 @@ function SignalCard({ icon: Icon, label, explainKey, regimeKey, item, override, 
       </div>
       <div className="flex items-center justify-between gap-2">
         <span className="tnum text-base font-semibold text-slate-100">{item?.value != null ? fmtVal(item.value) : '—'}</span>
-        {level && <Pill tone={LEVEL_TONE[level]}>{REGIME_LABEL[regimeKey][level]}</Pill>}
+        {(override ?? item?.level) && <Pill tone={LEVEL_TONE[override ?? item.level]}>{REGIME_LABEL[regimeKey][override ?? item.level]}</Pill>}
       </div>
       <select
         value={override ?? ''}
@@ -50,35 +52,72 @@ function SignalCard({ icon: Icon, label, explainKey, regimeKey, item, override, 
   )
 }
 
-function HoldingRow({ h, monthly }) {
+// 종목 1줄: 비중/보수/연평균 + 현재가·주수 입력·매수금액
+function HoldingRow({ r, monthly, showTrade, onShares, onPrice }) {
+  const { h, price, hasAuto, rec, sharesVal, buy, target } = r
   const km = KLASS[h.klass]
   const explain = EXPLAIN[h.klass]
-  const buy = monthly > 0 ? Math.round((monthly * h.weight) / 100) : 0
   const up = h.delta > 0
   return (
-    <div className="flex items-center gap-2 border-t border-white/5 py-2 first:border-0">
-      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: km?.color }} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm text-slate-100">{h.name}</span>
-          {explain && <InfoTip title={explain.title} body={explain.body} />}
+    <div className="border-t border-white/5 py-2 first:border-0">
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: km?.color }} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm text-slate-100">{h.name}</span>
+            {explain && <InfoTip title={explain.title} body={explain.body} />}
+          </div>
+          <div className="truncate text-[11px] text-slate-500">
+            {h.ticker} · {h.role} · 보수 {h.expense < 0.01 ? h.expense.toFixed(4) : h.expense.toFixed(2)}% · 연평균 ~{h.annualReturn}%
+          </div>
         </div>
-        <div className="truncate text-[11px] text-slate-500">
-          {h.ticker} · {h.role} · 보수 {h.expense < 0.01 ? h.expense.toFixed(4) : h.expense.toFixed(2)}% · 연평균 ~{h.annualReturn}%
+        <div className="shrink-0 text-right">
+          <div className="tnum text-sm font-semibold text-slate-100">
+            {h.weight}%
+            {h.delta !== 0 && (
+              <span className={`ml-1 text-[11px] font-medium ${up ? 'text-rose-400' : 'text-sky-400'}`}>
+                {up ? '▲' : '▼'}
+                {Math.abs(h.delta)}
+              </span>
+            )}
+          </div>
+          {target > 0 && <div className="tnum text-[11px] text-slate-500">목표 {fmtNum(target)}원</div>}
         </div>
       </div>
-      <div className="shrink-0 text-right">
-        <div className="tnum text-sm font-semibold text-slate-100">
-          {h.weight}%
-          {h.delta !== 0 && (
-            <span className={`ml-1 text-[11px] font-medium ${up ? 'text-rose-400' : 'text-sky-400'}`}>
-              {up ? '▲' : '▼'}
-              {Math.abs(h.delta)}
+
+      {showTrade && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 pl-4 text-[11px]">
+          {hasAuto ? (
+            <span className="text-slate-400">
+              현재가 <b className="tnum text-slate-200">{fmtNum(Math.round(price))}</b>원
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-slate-400">
+              현재가
+              <input
+                inputMode="numeric"
+                value={onPrice.value}
+                onChange={(e) => onPrice.set(e.target.value)}
+                placeholder="직접"
+                className="tnum w-16 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-right text-slate-100 outline-none focus:border-indigo-400"
+              />
+              원
             </span>
           )}
+          <span className="text-slate-500">×</span>
+          <input
+            inputMode="numeric"
+            value={sharesVal}
+            onChange={(e) => onShares(e.target.value)}
+            className="tnum w-14 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-right text-slate-100 outline-none focus:border-indigo-400"
+          />
+          <span className="text-slate-400">주</span>
+          {price > 0 && (
+            <span className="tnum font-medium text-slate-200">= {fmtNum(Math.round(buy))}원</span>
+          )}
+          {price > 0 && target > 0 && <span className="text-slate-600">(추천 {rec}주)</span>}
         </div>
-        {buy > 0 && <div className="tnum text-[11px] text-slate-500">월 {fmtNum(buy)}원</div>}
-      </div>
+      )}
     </div>
   )
 }
@@ -90,24 +129,34 @@ export default function AccountPortfolios({ alloc }) {
   const [mode, setMode] = useState('balanced')
   const [override, setOverride] = useState({ fx: null, val: null, rate: null })
 
-  const fetchSignals = async () => {
+  const [quotes, setQuotes] = useState({}) // { [ticker]: 현재가 }
+  const [priceOv, setPriceOv] = useState({}) // 시세 차단 시 직접 입력한 현재가
+  const [shares, setShares] = useState({}) // { [acc:ticker]: '주수' }
+  const [touched, setTouched] = useState(() => new Set()) // 사용자가 직접 만진 주수 키
+
+  const fetchAll = async () => {
     setLoading(true)
     setErr(null)
-    try {
-      setSignals(await stocksApi.marketSignals())
-    } catch (e) {
-      setErr(e?.response?.data?.error || e.message || '조회 실패')
-    } finally {
-      setLoading(false)
+    const tickers = [...new Set(BASE_ACCOUNTS.flatMap((a) => a.holdings.map((h) => h.ticker)))]
+    const [sig, quoteRes] = await Promise.allSettled([stocksApi.marketSignals(), stocksApi.quote(tickers.map(toYahoo))])
+    if (sig.status === 'fulfilled') setSignals(sig.value)
+    else setErr(sig.reason?.response?.data?.error || sig.reason?.message || '조회 실패')
+    if (quoteRes.status === 'fulfilled') {
+      const map = {}
+      for (const q of quoteRes.value || []) {
+        const base = String(q.symbol || '').replace(/\.KS$/, '')
+        if (q.price != null) map[base] = q.price
+      }
+      setQuotes(map)
     }
+    setLoading(false)
   }
 
   useEffect(() => {
-    fetchSignals()
+    fetchAll()
   }, [])
 
   const autoRegime = useMemo(() => classifyRegime(signals || {}), [signals])
-  // 자동 판정 위에 사용자의 수동 조정(override)을 덮어쓴다.
   const regime = useMemo(
     () => ({
       fx: override.fx ? { level: override.fx, value: autoRegime.fx?.value } : autoRegime.fx,
@@ -118,9 +167,24 @@ export default function AccountPortfolios({ alloc }) {
   )
   const summary = regimeSummary(regime)
   const setOv = (k) => (v) => setOverride((o) => ({ ...o, [k]: v }))
-  // 자동조회가 비었고(시세 차단 등) 수동 조정도 없으면 폴백 안내를 띄운다.
   const noLevels = !regime.fx && !regime.val && !regime.rate
   const showFallback = !loading && noLevels && (err || signals)
+
+  // 시세 차단 시 직접 입력한 가격을 우선, 없으면 자동조회 가격
+  const effPrice = (ticker) => {
+    const ov = Number(priceOv[ticker])
+    if (ov > 0) return ov
+    return quotes[ticker] ?? null
+  }
+  const onShares = (key) => (v) => {
+    const d = v.replace(/[^\d]/g, '')
+    setTouched((prev) => new Set(prev).add(key))
+    setShares((s) => ({ ...s, [key]: d }))
+  }
+  const onPrice = (ticker) => ({
+    value: priceOv[ticker] ?? '',
+    set: (v) => setPriceOv((p) => ({ ...p, [ticker]: v.replace(/[^\d.]/g, '') })),
+  })
 
   return (
     <div className="space-y-4">
@@ -130,7 +194,7 @@ export default function AccountPortfolios({ alloc }) {
         <InfoTip title={EXPLAIN.rebalance.title} body={EXPLAIN.rebalance.body} />
         {summary && <Pill tone="indigo">{summary}</Pill>}
         <button
-          onClick={fetchSignals}
+          onClick={fetchAll}
           disabled={loading}
           className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-xs font-medium text-slate-200 hover:bg-white/15 disabled:opacity-50"
         >
@@ -146,7 +210,7 @@ export default function AccountPortfolios({ alloc }) {
       </div>
       {showFallback && (
         <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
-          시세 자동조회를 못 가져왔어요{err ? ` (${err})` : ''}. 각 카드의 드롭다운으로 현 상황(높음/보통/낮음)을 직접 골라도 비중이 계산돼요.
+          시세 자동조회를 못 가져왔어요{err ? ` (${err})` : ''}. 국면은 각 카드 드롭다운으로, 현재가는 종목별 칸에 직접 입력하면 주수·금액이 계산돼요.
         </div>
       )}
 
@@ -173,14 +237,13 @@ export default function AccountPortfolios({ alloc }) {
           onClick={() => {
             setOverride({ fx: null, val: null, rate: null })
             setMode('balanced')
-            if (!signals) fetchSignals()
           }}
           className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-400"
         >
           <Sparkles size={14} /> 자동으로 맞춰줘
         </button>
       </div>
-      <p className="text-[11px] text-slate-500">{MODES.find((m) => m.key === mode)?.desc} · 비중은 “이번 달 새로 넣는 돈”을 이렇게 나누라는 의미예요(전량 매도 아님).</p>
+      <p className="text-[11px] text-slate-500">{MODES.find((m) => m.key === mode)?.desc} · 비중은 “이번 달 새로 넣는 돈”을 이렇게 나누라는 의미예요(전량 매도 아님). 국내 ETF는 소수점 매매가 안 돼서 정수 주수로 담아요.</p>
 
       {/* 계좌별 종목 */}
       <div className="grid gap-3 lg:grid-cols-2">
@@ -190,6 +253,21 @@ export default function AccountPortfolios({ alloc }) {
           const monthly = Math.round(alloc?.[acc.key] || 0)
           const exp = blendedExpense(tilted)
           const ret = blendedReturn(tilted)
+          const showTrade = monthly > 0 && acc.key !== 'cma'
+
+          const rows = tilted.map((h) => {
+            const key = `${acc.key}:${h.ticker}`
+            const price = effPrice(h.ticker)
+            const target = monthly > 0 ? Math.round((monthly * h.weight) / 100) : 0
+            const rec = price > 0 ? Math.floor(target / price) : 0
+            const sharesVal = touched.has(key) ? shares[key] ?? '' : String(rec)
+            const sNum = Number(sharesVal) || 0
+            return { h, key, price, hasAuto: quotes[h.ticker] != null, target, rec, sharesVal, sNum, buy: price > 0 ? sNum * price : 0 }
+          })
+          const invested = rows.reduce((s, r) => s + r.buy, 0)
+          const anyPrice = rows.some((r) => r.price > 0)
+          const leftover = monthly - invested
+
           return (
             <Card key={acc.key} className="p-3.5">
               <div className="flex items-start justify-between gap-2">
@@ -212,17 +290,28 @@ export default function AccountPortfolios({ alloc }) {
               </div>
               <div className="mt-2 rounded-lg bg-white/[0.02] px-2.5 py-1.5 text-[10px] text-slate-500">📌 {acc.constraint}</div>
               <div className="mt-1.5">
-                {tilted.map((h) => (
-                  <HoldingRow key={h.ticker + h.klass} h={h} monthly={monthly} />
+                {rows.map((r) => (
+                  <HoldingRow key={r.h.ticker + r.h.klass} r={r} monthly={monthly} showTrade={showTrade} onShares={onShares(r.key)} onPrice={onPrice(r.h.ticker)} />
                 ))}
               </div>
+              {showTrade && anyPrice && (
+                <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2 text-[11px]">
+                  <span className="text-slate-400">
+                    매수 합계 <b className="tnum text-slate-200">{fmtNum(Math.round(invested))}</b>원
+                  </span>
+                  <span className={leftover < 0 ? 'text-rose-400' : 'text-slate-500'}>
+                    {leftover < 0 ? '월 배분 초과 ' : '남는 현금 '}
+                    <b className="tnum">{fmtNum(Math.abs(Math.round(leftover)))}</b>원
+                  </span>
+                </div>
+              )}
             </Card>
           )
         })}
       </div>
 
       <p className="text-[11px] leading-relaxed text-slate-500">
-        ※ 공격형·사회초년생 기준 <b>참고용 예시</b>이며 투자자문이 아닙니다. 보수율·세제 한도는 2026년 추정으로 변동될 수 있어 증권사/운용사 공시를 확인하세요. 종목명·티커는 동일 지수를 추종하는 타 운용사 ETF로 대체 가능합니다.
+        ※ 공격형·사회초년생 기준 <b>참고용 예시</b>이며 투자자문이 아닙니다. 현재가는 시세 서버 연결 시 자동 표시되고, 없으면 종목별 칸에 직접 입력할 수 있어요(소수점 매매 불가 → 정수 주수). 보수율·연평균·세제 한도는 추정값이라 증권사/운용사 공시를 확인하세요.
       </p>
     </div>
   )
