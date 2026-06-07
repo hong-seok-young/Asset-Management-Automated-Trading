@@ -25,8 +25,7 @@ export const BASE_ACCOUNTS = [
     constraint: '국내상장 ETF·펀드만 (개별주식 불가)',
     equityFloor: 60,
     holdings: [
-      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '미국 대형주 코어', weight: 50, expense: 0.0068, annualReturn: 10 },
-      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '성장(빅테크)', weight: 30, expense: 0.0068, annualReturn: 13 },
+      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '미국 성장 코어(빅테크)', weight: 80, expense: 0.0068, annualReturn: 13 },
       { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15, annualReturn: 7 },
       { ticker: '481060', name: 'KODEX 미국30년국채액티브(H)', klass: 'longBond', role: '위기 완충', weight: 8, expense: 0.05, annualReturn: 4 },
     ],
@@ -39,8 +38,7 @@ export const BASE_ACCOUNTS = [
     equityFloor: 60,
     sameAs: 'pension',
     holdings: [
-      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '미국 대형주 코어', weight: 50, expense: 0.0068, annualReturn: 10 },
-      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '성장(빅테크)', weight: 30, expense: 0.0068, annualReturn: 13 },
+      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '미국 성장 코어(빅테크)', weight: 80, expense: 0.0068, annualReturn: 13 },
       { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15, annualReturn: 7 },
       { ticker: '481060', name: 'KODEX 미국30년국채액티브(H)', klass: 'longBond', role: '위기 완충', weight: 8, expense: 0.05, annualReturn: 4 },
     ],
@@ -52,8 +50,7 @@ export const BASE_ACCOUNTS = [
     constraint: '국내상장 ETF·펀드만 · 위험자산 70% 한도',
     equityFloor: 60,
     holdings: [
-      { ticker: '360750', name: 'TIGER 미국S&P500', klass: 'usStock', role: '위험자산 코어', weight: 45, expense: 0.0068, annualReturn: 10 },
-      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '위험자산 성장', weight: 25, expense: 0.0068, annualReturn: 13 },
+      { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '위험자산 코어(나스닥100)', weight: 70, expense: 0.0068, annualReturn: 13 },
       { ticker: '434060', name: 'KODEX TDF2050액티브', klass: 'tdf', role: '안전자산 30% 의무(내부 주식 ~80%)', weight: 30, expense: 0.3, annualReturn: 7.5 },
     ],
   },
