@@ -9,7 +9,7 @@ export const KLASS = {
   dividend: { label: '미국 배당', equity: true, color: '#ec4899' },
   reit: { label: '리츠', equity: true, color: '#f97316' },
   gold: { label: '금', equity: false, color: '#eab308' },
-  longBond: { label: '장기채', equity: false, color: '#10b981' },
+  longBond: { label: '미국채(10년)', equity: false, color: '#10b981' },
   tdf: { label: 'TDF(안전자산)', equity: false, color: '#14b8a6', locked: true },
   cash: { label: '현금성', equity: false, color: '#64748b', locked: true },
 }
@@ -27,7 +27,7 @@ export const BASE_ACCOUNTS = [
     holdings: [
       { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '미국 성장 코어(빅테크)', weight: 80, expense: 0.0068, annualReturn: 13 },
       { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15, annualReturn: 7 },
-      { ticker: '481060', name: 'KODEX 미국30년국채액티브(H)', klass: 'longBond', role: '위기 완충', weight: 8, expense: 0.05, annualReturn: 4 },
+      { ticker: '305080', name: 'TIGER 미국채10년선물', klass: 'longBond', role: '위기 완충(중기채)', weight: 8, expense: 0.29, annualReturn: 3.5 },
     ],
   },
   {
@@ -40,7 +40,7 @@ export const BASE_ACCOUNTS = [
     holdings: [
       { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '미국 성장 코어(빅테크)', weight: 80, expense: 0.0068, annualReturn: 13 },
       { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15, annualReturn: 7 },
-      { ticker: '481060', name: 'KODEX 미국30년국채액티브(H)', klass: 'longBond', role: '위기 완충', weight: 8, expense: 0.05, annualReturn: 4 },
+      { ticker: '305080', name: 'TIGER 미국채10년선물', klass: 'longBond', role: '위기 완충(중기채)', weight: 8, expense: 0.29, annualReturn: 3.5 },
     ],
   },
   {
@@ -86,7 +86,7 @@ export const INVEST_ACCOUNT_KEYS = ['pension', 'pensionExtra', 'irp', 'isa']
 export const DEFAULT_PRICE = {
   '133690': 205500, // TIGER 미국나스닥100
   '411060': 16476, // TIGER KRX금현물
-  '481060': 8585, // KODEX 미국30년국채액티브(H)
+  '305080': 13480, // TIGER 미국채10년선물
   '458730': 13500, // TIGER 미국배당다우존스(SCHD)
   '329200': 4600, // TIGER 리츠부동산인프라
   '434060': 16500, // KODEX TDF2050액티브
@@ -279,8 +279,8 @@ export const EXPLAIN = {
     body: '금은 주식과 잘 따로 움직이는(무상관) 분산 자산입니다. 환율이 높거나, 증시가 고평가거나, 금리가 낮아 실질금리가 떨어질 때 늘립니다. 반대로 환율이 낮고 증시가 저평가이며 금리가 높을 때는 비중을 줄입니다.',
   },
   longBond: {
-    title: '장기채는 언제 늘리고 줄이나',
-    body: '장기채는 금리에 민감합니다. 금리가 높을 때(인하 사이클 기대) 늘리면 금리 하락 시 가격 상승으로 이득을 봅니다. 금리가 낮을 때 늘리면 향후 금리상승에 크게 손실 볼 수 있어 줄입니다. 평소엔 주식이 빠질 때 완충 역할을 합니다.',
+    title: '미국채(10년)는 언제 늘리고 줄이나',
+    body: '국채는 금리에 민감합니다(10년물은 30년물보다 변동이 작은 중기채). 금리가 높을 때(인하 사이클 기대) 늘리면 금리 하락 시 가격 상승으로 이득을 봅니다. 금리가 낮을 때 늘리면 향후 금리상승에 손실 볼 수 있어 줄입니다. 평소엔 주식이 빠질 때 완충 역할을 합니다.',
   },
   tdf: {
     title: 'IRP의 TDF 30%는 왜 고정인가',
