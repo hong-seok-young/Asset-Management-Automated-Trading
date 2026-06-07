@@ -81,6 +81,19 @@ export const BASE_ACCOUNTS = [
 // 투자(성장) 계좌 — CMA(현금성 파킹)는 수익률 블렌드에서 제외
 export const INVEST_ACCOUNT_KEYS = ['pension', 'pensionExtra', 'irp', 'isa']
 
+// 현재가 시드(원) — 시세 자동조회가 안 될 때(예: 프론트만 배포) 기본값으로 채워 정수 주수를 계산한다.
+// 2026-06 조회 기준 근사치. 실제 매수 전 증권사 현재가로 갱신할 것.
+export const DEFAULT_PRICE = {
+  '133690': 205500, // TIGER 미국나스닥100
+  '411060': 16476, // TIGER KRX금현물
+  '481060': 8585, // KODEX 미국30년국채액티브(H)
+  '458730': 13500, // TIGER 미국배당다우존스(SCHD)
+  '329200': 4600, // TIGER 리츠부동산인프라
+  '434060': 16500, // KODEX TDF2050액티브
+  '459580': 1080000, // KODEX CD금리액티브 (CMA·매수 UI 미사용)
+  '360750': 21000, // TIGER 미국S&P500 (현재 미사용)
+}
+
 // ── 시장 신호 → 국면 판정 ───────────────────────────────────────────
 // signals: { fx:{price}, sp500:{fromHigh}, nasdaq:{fromHigh}, ust10y:{price} }
 // 각 항목 level: 'high' | 'mid' | 'low'

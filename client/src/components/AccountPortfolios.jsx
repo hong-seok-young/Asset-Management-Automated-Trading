@@ -6,6 +6,7 @@ import { fmtNum } from '../lib/format.js'
 import { stocksApi } from '../api.js'
 import {
   BASE_ACCOUNTS,
+  DEFAULT_PRICE,
   EXPLAIN,
   KLASS,
   MODES,
@@ -129,8 +130,9 @@ export default function AccountPortfolios({ alloc }) {
   const [mode, setMode] = useState('balanced')
   const [override, setOverride] = useState({ fx: null, val: null, rate: null })
 
-  const [quotes, setQuotes] = useState({}) // { [ticker]: 현재가 }
-  const [priceOv, setPriceOv] = useState({}) // 시세 차단 시 직접 입력한 현재가
+  const [quotes, setQuotes] = useState({}) // { [ticker]: 현재가 } 시세 자동조회 결과
+  // 현재가 직접 입력값 — 시세 서버가 없을 때를 대비해 조회한 기본값으로 미리 채워둔다.
+  const [priceOv, setPriceOv] = useState(() => Object.fromEntries(Object.entries(DEFAULT_PRICE).map(([k, v]) => [k, String(v)])))
   const [shares, setShares] = useState({}) // { [acc:ticker]: '주수' }
   const [touched, setTouched] = useState(() => new Set()) // 사용자가 직접 만진 주수 키
 
@@ -170,11 +172,11 @@ export default function AccountPortfolios({ alloc }) {
   const noLevels = !regime.fx && !regime.val && !regime.rate
   const showFallback = !loading && noLevels && (err || signals)
 
-  // 시세 차단 시 직접 입력한 가격을 우선, 없으면 자동조회 가격
+  // 시세 자동조회가 있으면 그것을, 없으면 직접 입력값(기본값 시드 포함)을 쓴다.
   const effPrice = (ticker) => {
+    if (quotes[ticker] != null) return quotes[ticker]
     const ov = Number(priceOv[ticker])
-    if (ov > 0) return ov
-    return quotes[ticker] ?? null
+    return ov > 0 ? ov : null
   }
   const onShares = (key) => (v) => {
     const d = v.replace(/[^\d]/g, '')
@@ -311,7 +313,7 @@ export default function AccountPortfolios({ alloc }) {
       </div>
 
       <p className="text-[11px] leading-relaxed text-slate-500">
-        ※ 공격형·사회초년생 기준 <b>참고용 예시</b>이며 투자자문이 아닙니다. 현재가는 시세 서버 연결 시 자동 표시되고, 없으면 종목별 칸에 직접 입력할 수 있어요(소수점 매매 불가 → 정수 주수). 보수율·연평균·세제 한도는 추정값이라 증권사/운용사 공시를 확인하세요.
+        ※ 공격형·사회초년생 기준 <b>참고용 예시</b>이며 투자자문이 아닙니다. 현재가는 시세 서버 연결 시 자동 갱신되고, 없으면 <b>2026-06 조회 근사치</b>가 미리 채워져 있어요(소수점 매매 불가 → 정수 주수). 실제 매수 전 증권사 현재가로 확인·수정하세요. 보수율·연평균·세제 한도도 추정값입니다.
       </p>
     </div>
   )
