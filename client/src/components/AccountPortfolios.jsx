@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Coins, Landmark, PiggyBank, RefreshCw, Sparkles, TrendingUp, Wallet } from 'lucide-react'
 import { Card, Pill } from './ui.jsx'
 import InfoTip from './InfoTip.jsx'
@@ -8,6 +8,7 @@ import {
   BASE_ACCOUNTS,
   DEFAULT_PRICE,
   EXPLAIN,
+  FRACTIONAL_NASDAQ,
   KLASS,
   MODES,
   REGIME_LABEL,
@@ -119,6 +120,40 @@ function HoldingRow({ r, monthly, showTrade, onShares, onPrice }) {
           {price > 0 && target > 0 && <span className="text-slate-600">(추천 {rec}주)</span>}
         </div>
       )}
+    </div>
+  )
+}
+
+// TIGER 나스닥 아래 자투리 메우기 줄 (저가 KODEX 나스닥100TR)
+function FillRow({ fill, onShares, onPrice }) {
+  const { name, ticker, price, hasAuto, rec, sharesVal, buy } = fill
+  return (
+    <div className="flex items-center gap-2 border-t border-dashed border-white/10 py-2 pl-6">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-medium text-amber-300/90">↳ 자투리</span>
+          <span className="truncate text-[13px] text-slate-200">{name}</span>
+        </div>
+        <div className="truncate text-[11px] text-slate-500">{ticker} · 같은 지수 저가 ETF로 남는 돈 채우기</div>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-[11px]">
+        {hasAuto ? (
+          <span className="text-slate-400">
+            현재가 <b className="tnum text-slate-200">{fmtNum(Math.round(price))}</b>원
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-slate-400">
+            현재가
+            <input inputMode="numeric" value={onPrice.value} onChange={(e) => onPrice.set(e.target.value)} className="tnum w-16 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-right text-slate-100 outline-none focus:border-indigo-400" />
+            원
+          </span>
+        )}
+        <span className="text-slate-500">×</span>
+        <input inputMode="numeric" value={sharesVal} onChange={(e) => onShares(e.target.value)} className="tnum w-14 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-right text-slate-100 outline-none focus:border-indigo-400" />
+        <span className="text-slate-400">주</span>
+        {price > 0 && <span className="tnum font-medium text-slate-200">= {fmtNum(Math.round(buy))}원</span>}
+        {price > 0 && <span className="text-slate-600">(추천 {rec}주)</span>}
+      </div>
     </div>
   )
 }
@@ -266,9 +301,22 @@ export default function AccountPortfolios({ alloc }) {
             const sNum = Number(sharesVal) || 0
             return { h, key, price, hasAuto: quotes[h.ticker] != null, target, rec, sharesVal, sNum, buy: price > 0 ? sNum * price : 0 }
           })
-          const invested = rows.reduce((s, r) => s + r.buy, 0)
+          let invested = rows.reduce((s, r) => s + r.buy, 0)
           const anyPrice = rows.some((r) => r.price > 0)
-          const leftover = monthly - invested
+          let leftover = monthly - invested
+
+          // TIGER 나스닥 보유 계좌면, 남는 돈을 저가 KODEX 나스닥100TR로 메우는 보조 줄
+          let fill = null
+          if (showTrade && tilted.some((h) => h.ticker === FRACTIONAL_NASDAQ.forTicker)) {
+            const fkey = `${acc.key}:${FRACTIONAL_NASDAQ.ticker}`
+            const fprice = effPrice(FRACTIONAL_NASDAQ.ticker)
+            const frec = fprice > 0 && leftover > 0 ? Math.floor(leftover / fprice) : 0
+            const fsharesVal = touched.has(fkey) ? shares[fkey] ?? '' : String(frec)
+            const fbuy = fprice > 0 ? (Number(fsharesVal) || 0) * fprice : 0
+            fill = { key: fkey, ticker: FRACTIONAL_NASDAQ.ticker, name: FRACTIONAL_NASDAQ.name, price: fprice, hasAuto: quotes[FRACTIONAL_NASDAQ.ticker] != null, rec: frec, sharesVal: fsharesVal, buy: fbuy }
+            invested += fbuy
+            leftover -= fbuy
+          }
 
           return (
             <Card key={acc.key} className="p-3.5">
@@ -293,7 +341,10 @@ export default function AccountPortfolios({ alloc }) {
               <div className="mt-2 rounded-lg bg-white/[0.02] px-2.5 py-1.5 text-[10px] text-slate-500">📌 {acc.constraint}</div>
               <div className="mt-1.5">
                 {rows.map((r) => (
-                  <HoldingRow key={r.h.ticker + r.h.klass} r={r} monthly={monthly} showTrade={showTrade} onShares={onShares(r.key)} onPrice={onPrice(r.h.ticker)} />
+                  <Fragment key={r.h.ticker + r.h.klass}>
+                    <HoldingRow r={r} monthly={monthly} showTrade={showTrade} onShares={onShares(r.key)} onPrice={onPrice(r.h.ticker)} />
+                    {fill && r.h.ticker === FRACTIONAL_NASDAQ.forTicker && <FillRow fill={fill} onShares={onShares(fill.key)} onPrice={onPrice(fill.ticker)} />}
+                  </Fragment>
                 ))}
               </div>
               {showTrade && anyPrice && (
