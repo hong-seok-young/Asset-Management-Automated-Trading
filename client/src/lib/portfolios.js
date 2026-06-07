@@ -27,7 +27,7 @@ export const BASE_ACCOUNTS = [
     holdings: [
       { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '미국 성장 코어(빅테크)', weight: 80, expense: 0.0068, annualReturn: 13 },
       { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15, annualReturn: 7 },
-      { ticker: '305080', name: 'TIGER 미국채10년선물', klass: 'longBond', role: '위기 완충(중기채)', weight: 8, expense: 0.29, annualReturn: 3.5 },
+      { ticker: '0091C0', name: 'KODEX 미국10년국채액티브(H)', klass: 'longBond', role: '위기 완충(중기채·환헤지)', weight: 8, expense: 0.15, annualReturn: 3.5 },
     ],
   },
   {
@@ -40,7 +40,7 @@ export const BASE_ACCOUNTS = [
     holdings: [
       { ticker: '133690', name: 'TIGER 미국나스닥100', klass: 'usGrowth', role: '미국 성장 코어(빅테크)', weight: 80, expense: 0.0068, annualReturn: 13 },
       { ticker: '411060', name: 'TIGER KRX금현물', klass: 'gold', role: '무상관 분산', weight: 12, expense: 0.15, annualReturn: 7 },
-      { ticker: '305080', name: 'TIGER 미국채10년선물', klass: 'longBond', role: '위기 완충(중기채)', weight: 8, expense: 0.29, annualReturn: 3.5 },
+      { ticker: '0091C0', name: 'KODEX 미국10년국채액티브(H)', klass: 'longBond', role: '위기 완충(중기채·환헤지)', weight: 8, expense: 0.15, annualReturn: 3.5 },
     ],
   },
   {
@@ -86,7 +86,7 @@ export const INVEST_ACCOUNT_KEYS = ['pension', 'pensionExtra', 'irp', 'isa']
 export const DEFAULT_PRICE = {
   '133690': 205500, // TIGER 미국나스닥100
   '411060': 16476, // TIGER KRX금현물
-  '305080': 13480, // TIGER 미국채10년선물
+  '0091C0': 10110, // KODEX 미국10년국채액티브(H)
   '458730': 13500, // TIGER 미국배당다우존스(SCHD)
   '329200': 4600, // TIGER 리츠부동산인프라
   '434060': 16500, // KODEX TDF2050액티브
