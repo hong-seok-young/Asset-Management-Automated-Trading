@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calculator, CalendarClock, ChevronLeft, ChevronRight, Info, Landmark, LineChart, Plus, PiggyBank, Share2, Target, TrendingUp, Trash2, Wallet } from 'lucide-react'
+import { Calculator, CalendarClock, ChevronLeft, ChevronRight, Info, Landmark, LineChart, Plus, PiggyBank, Share2, Table2, Target, TrendingUp, Trash2, Wallet } from 'lucide-react'
 import { Card, Field, Input, Pill, Select } from '../components/ui.jsx'
 import { fmtNum } from '../lib/format.js'
 import AllocationPie, { COLORS } from '../components/AllocationPie.jsx'
@@ -8,6 +8,7 @@ import AccountGuide from '../components/AccountGuide.jsx'
 import AccountPortfolios from '../components/AccountPortfolios.jsx'
 import InfoTip from '../components/InfoTip.jsx'
 import { EXPLAIN, expectedReturnFromAlloc } from '../lib/portfolios.js'
+import AccountTaxTable from '../components/AccountTaxTable.jsx'
 
 const LS_KEY = 'taxguide.inputs.v4'
 const load = () => {
@@ -291,6 +292,7 @@ export default function TaxGuide() {
   const saved = { ...load(), ...fromUrl() }
   const cy = new Date().getFullYear()
   const [copied, setCopied] = useState(false)
+  const [showTaxTable, setShowTaxTable] = useState(false)
   const [salaryMan, setSalaryMan] = useState(saved.salaryMan ?? '') // 월 실수령(세후, 만원)
   const [sideMan, setSideMan] = useState(saved.sideMan ?? '') // 부업 월 수입(만원)
   const [spendMan, setSpendMan] = useState(saved.spendMan ?? '') // 월 소비(만원)
@@ -453,6 +455,12 @@ export default function TaxGuide() {
         <div className="mb-3 flex items-center gap-2">
           <Calculator size={17} className="text-indigo-300" />
           <h2 className="text-sm font-semibold">자산 성장 · 절세 가이드</h2>
+          <button
+            onClick={() => setShowTaxTable(true)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-xs font-medium text-slate-200 hover:bg-white/15"
+          >
+            <Table2 size={13} /> 계좌별 과세 비교
+          </button>
         </div>
 
         {/* 핵심 입력 */}
@@ -818,6 +826,8 @@ export default function TaxGuide() {
           </details>
         </>
       )}
+
+      {showTaxTable && <AccountTaxTable onClose={() => setShowTaxTable(false)} />}
     </div>
   )
 }
