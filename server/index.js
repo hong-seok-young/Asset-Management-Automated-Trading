@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url'
 import cors from 'cors'
 import express from 'express'
 import cryptoRouter from './routes/crypto.js'
+import kiwoomRouter from './routes/kiwoom.js'
 import stocksRouter from './routes/stocks.js'
+import upbitRouter from './routes/upbit.js'
 import { startEngine } from './services/trader.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -17,6 +19,8 @@ app.use(express.json())
 app.get('/api/health', (req, res) => res.json({ ok: true, time: Date.now() }))
 app.use('/api/stocks', stocksRouter)
 app.use('/api/crypto', cryptoRouter)
+app.use('/api/kiwoom', kiwoomRouter)
+app.use('/api/upbit', upbitRouter)
 
 // ── 빌드된 프론트(client/dist) 서빙 — 단일 서비스(앱+API 한 주소) ──
 // 빌드가 있을 때만 켠다. (개발 중엔 Vite:5173 을 쓰므로 dist 가 없어도 정상)

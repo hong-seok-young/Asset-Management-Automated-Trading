@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { KeyRound, Lock, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import { stocksApi } from '../api.js'
 import { Button, Card, Empty, Field, Input, Pill } from '../components/ui.jsx'
 import { fmtNum, fmtPct, fmtPrice, tone, toneBg } from '../lib/format.js'
+import {
+  clearCreds,
+  currentMock,
+  hasStoredCreds,
+  isUnlocked,
+  lock,
+  saveCreds,
+  testConnection,
+  unlock,
+} from '../lib/kiwoom.js'
 import AllocationPie, { COLORS } from '../components/AllocationPie.jsx'
 import PriceChart from '../components/PriceChart.jsx'
 
@@ -24,6 +34,13 @@ export default function Portfolio() {
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showKiwoom, setShowKiwoom] = useState(false)
+  const [kiwoomStored, setKiwoomStored] = useState(hasStoredCreds())
+  const [kiwoomUnlocked, setKiwoomUnlocked] = useState(isUnlocked())
+  const syncKiwoomState = () => {
+    setKiwoomStored(hasStoredCreds())
+    setKiwoomUnlocked(isUnlocked())
+  }
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(holdings))
@@ -120,9 +137,18 @@ export default function Portfolio() {
               </span>
             </div>
           </div>
-          <Button variant="ghost" onClick={refresh} title="새로고침">
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={kiwoomStored ? 'ghost' : 'default'}
+              onClick={() => setShowKiwoom(true)}
+            >
+              {kiwoomStored && !kiwoomUnlocked ? <Lock size={14} /> : <KeyRound size={14} />}
+              {!kiwoomStored ? '키움 연동' : kiwoomUnlocked ? '키움 연결됨' : '키움 잠김'}
+            </Button>
+            <Button variant="ghost" onClick={refresh} title="새로고침">
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </Button>
+          </div>
         </div>
         {fx && (
           <div className="mt-3 text-xs text-slate-500">
@@ -225,6 +251,9 @@ export default function Portfolio() {
       )}
 
       {showAdd && <AddHolding onAdd={addHolding} onClose={() => setShowAdd(false)} />}
+      {showKiwoom && (
+        <KiwoomConnect onClose={() => setShowKiwoom(false)} onChange={syncKiwoomState} />
+      )}
     </div>
   )
 }
@@ -367,6 +396,254 @@ function AddHolding({ onAdd, onClose }) {
             </Button>
           </div>
         )}
+      </Card>
+    </div>
+  )
+}
+
+function KiwoomConnect({ onClose, onChange }) {
+  const stored = hasStoredCreds()
+  const [unlocked, setUnlocked] = useState(isUnlocked())
+  // setup: 저장된 키 없음 / unlock: 저장됨+잠김 / ready: 저장됨+해제됨
+  const mode = !stored ? 'setup' : unlocked ? 'ready' : 'unlock'
+
+  const [appkey, setAppkey] = useState('')
+  const [secretkey, setSecretkey] = useState('')
+  const [mock, setMock] = useState(true)
+  const [pass1, setPass1] = useState('')
+  const [pass2, setPass2] = useState('')
+  const [unlockPass, setUnlockPass] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  async function testAndSave() {
+    if (!appkey.trim() || !secretkey.trim()) {
+      setMsg({ ok: false, text: 'App Key와 Secret Key를 모두 입력하세요' })
+      return
+    }
+    if (pass1.length < 4) {
+      setMsg({ ok: false, text: '잠금 암호를 4자 이상 입력하세요' })
+      return
+    }
+    if (pass1 !== pass2) {
+      setMsg({ ok: false, text: '잠금 암호가 서로 다릅니다' })
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    const creds = { appkey: appkey.trim(), secretkey: secretkey.trim(), mock }
+    try {
+      await testConnection(creds)
+      await saveCreds(creds, pass1)
+      setUnlocked(true)
+      setMsg({ ok: true, text: '연결 성공! 키를 암호로 잠가 저장했습니다.' })
+      onChange?.()
+      setTimeout(onClose, 800)
+    } catch (e) {
+      setMsg({ ok: false, text: e?.response?.data?.error || e.message || '연결 실패' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function doUnlock() {
+    if (!unlockPass) {
+      setMsg({ ok: false, text: '암호를 입력하세요' })
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    try {
+      await unlock(unlockPass)
+      setUnlocked(true)
+      setMsg({ ok: true, text: '잠금 해제됨. 이제 조회할 수 있습니다.' })
+      onChange?.()
+      setTimeout(onClose, 700)
+    } catch (e) {
+      setMsg({ ok: false, text: e.message || '잠금 해제 실패' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function doLock() {
+    lock()
+    setUnlocked(false)
+    setUnlockPass('')
+    setMsg({ ok: true, text: '잠갔습니다. 다시 쓰려면 암호를 입력하세요.' })
+    onChange?.()
+  }
+
+  function unlink() {
+    clearCreds()
+    setUnlocked(false)
+    onChange?.()
+    onClose()
+  }
+
+  const seg = (active) =>
+    `flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+      active ? 'bg-indigo-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+    }`
+
+  const title =
+    mode === 'setup' ? '키움증권 연동' : mode === 'unlock' ? '키움 잠금 해제' : '키움 연동됨'
+
+  return (
+    <div
+      className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <Card
+        className="w-full max-w-md rounded-b-none bg-[#0e1320] p-5 sm:rounded-b-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-base font-semibold">{title}</h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/10">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {mode === 'setup' && (
+            <>
+              <Field label="App Key">
+                <Input
+                  value={appkey}
+                  onChange={(e) => setAppkey(e.target.value)}
+                  placeholder="키움 발급 App Key"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </Field>
+              <Field label="Secret Key">
+                <Input
+                  type="password"
+                  value={secretkey}
+                  onChange={(e) => setSecretkey(e.target.value)}
+                  placeholder="키움 발급 Secret Key"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </Field>
+              <Field label="모드">
+                <div className="flex gap-2">
+                  <button type="button" className={seg(mock)} onClick={() => setMock(true)}>
+                    모의투자
+                  </button>
+                  <button type="button" className={seg(!mock)} onClick={() => setMock(false)}>
+                    실전투자
+                  </button>
+                </div>
+              </Field>
+              {!mock && (
+                <div className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs text-amber-300">
+                  ⚠️ 실전투자 키입니다. 조회만 해도 실제 계좌 정보가 오갑니다.
+                </div>
+              )}
+              <Field label="잠금 암호" hint="키를 풀 때 쓰는 암호. 복구 불가하니 잊지 마세요.">
+                <Input
+                  type="password"
+                  value={pass1}
+                  onChange={(e) => setPass1(e.target.value)}
+                  placeholder="4자 이상"
+                  autoComplete="new-password"
+                />
+              </Field>
+              <Field label="잠금 암호 확인">
+                <Input
+                  type="password"
+                  value={pass2}
+                  onChange={(e) => setPass2(e.target.value)}
+                  placeholder="한 번 더"
+                  autoComplete="new-password"
+                />
+              </Field>
+            </>
+          )}
+
+          {mode === 'unlock' && (
+            <>
+              <p className="text-xs text-slate-400">
+                저장된 키움 키가 암호로 잠겨 있습니다. 암호를 입력해 잠금을 해제하세요.
+              </p>
+              <Field label="잠금 암호">
+                <Input
+                  type="password"
+                  value={unlockPass}
+                  onChange={(e) => setUnlockPass(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && doUnlock()}
+                  placeholder="저장할 때 정한 암호"
+                  autoComplete="off"
+                  autoFocus
+                />
+              </Field>
+            </>
+          )}
+
+          {mode === 'ready' && (
+            <div className="rounded-lg bg-emerald-500/10 px-3 py-3 text-sm text-emerald-200">
+              ✅ 연결됨 · 잠금 해제 상태{' '}
+              <Pill tone={currentMock() ? 'amber' : 'indigo'} className="ml-1">
+                {currentMock() ? '모의투자' : '실전투자'}
+              </Pill>
+              <p className="mt-1 text-[11px] text-emerald-300/70">
+                새로고침하면 다시 암호를 입력해야 합니다.
+              </p>
+            </div>
+          )}
+
+          {msg && (
+            <div
+              className={`rounded-lg px-3 py-2 text-xs ${
+                msg.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
+              }`}
+            >
+              {msg.text}
+            </div>
+          )}
+
+          {mode === 'setup' && (
+            <Button variant="primary" className="w-full" disabled={busy} onClick={testAndSave}>
+              {busy ? '연결 확인 중…' : '연결 테스트 후 저장'}
+            </Button>
+          )}
+          {mode === 'unlock' && (
+            <>
+              <Button variant="primary" className="w-full" disabled={busy} onClick={doUnlock}>
+                {busy ? '여는 중…' : '잠금 해제'}
+              </Button>
+              <Button variant="ghost" className="w-full" onClick={unlink}>
+                연동 해제 (저장된 키 삭제)
+              </Button>
+            </>
+          )}
+          {mode === 'ready' && (
+            <>
+              <Button variant="default" className="w-full" onClick={doLock}>
+                잠그기
+              </Button>
+              <Button variant="ghost" className="w-full" onClick={unlink}>
+                연동 해제 (저장된 키 삭제)
+              </Button>
+            </>
+          )}
+
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            🔒 키는 <b>암호로 암호화되어 이 브라우저에만</b> 저장됩니다(서버 저장 안 함). 공용 PC에서는
+            사용하지 마세요. 키는{' '}
+            <a
+              href="https://openapi.kiwoom.com"
+              target="_blank"
+              rel="noreferrer"
+              className="text-indigo-300 underline"
+            >
+              키움 REST API
+            </a>{' '}
+            에서 발급합니다.
+          </p>
+        </div>
       </Card>
     </div>
   )

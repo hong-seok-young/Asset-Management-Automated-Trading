@@ -1,8 +1,9 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
-import { Bot, PiggyBank, Wallet } from 'lucide-react'
+import { Bot, Coins, PiggyBank, Wallet } from 'lucide-react'
 import Portfolio from './pages/Portfolio.jsx'
 import TaxGuide from './pages/TaxGuide.jsx'
 import Trading from './pages/Trading.jsx'
+import UpbitAssets from './pages/UpbitAssets.jsx'
 
 function Tab({ to, icon, children }) {
   return (
@@ -42,6 +43,9 @@ export default function App() {
             <Tab to="/trading" icon={<Bot size={16} />}>
               자동매매
             </Tab>
+            <Tab to="/upbit" icon={<Coins size={16} />}>
+              업비트
+            </Tab>
           </nav>
         </div>
       </header>
@@ -51,6 +55,7 @@ export default function App() {
           <Route path="/" element={<TaxGuide />} />
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/trading" element={<Trading />} />
+          <Route path="/upbit" element={<UpbitAssets />} />
         </Routes>
       </main>
     </div>

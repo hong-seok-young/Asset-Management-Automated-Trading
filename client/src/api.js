@@ -28,3 +28,18 @@ export const cryptoApi = {
     api.get('/crypto/trades', { params: botId ? { botId } : {} }).then((r) => r.data),
   logs: () => api.get('/crypto/logs').then((r) => r.data),
 }
+
+export const kiwoomApi = {
+  // 무상태 프록시: appkey/secretkey 로 토큰 발급(중계). 서버는 저장하지 않는다.
+  token: (body) => api.post('/kiwoom/token', body).then((r) => r.data),
+  // token 으로 계좌평가잔고내역(kt00018) 조회(중계). 현재는 키움 원본(raw) 반환.
+  balance: (body) => api.post('/kiwoom/balance', body).then((r) => r.data),
+}
+
+export const upbitApi = {
+  // 무상태 프록시: 클라가 시크릿으로 서명한 JWT 로 잔고 조회(중계). 서버는 키를 저장하지 않는다.
+  accounts: (body) => api.post('/upbit/accounts', body).then((r) => r.data),
+  // 공개 시세(KRW 환산용). markets: ['KRW-BTC', ...]
+  prices: (markets) =>
+    api.get('/upbit/prices', { params: { markets: markets.join(',') } }).then((r) => r.data),
+}
